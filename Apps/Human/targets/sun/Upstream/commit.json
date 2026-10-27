@@ -1,0 +1,101 @@
+{
+  "sha": "9b68d0911552d8c880a46ca72980d3f9af9743ee",
+  "node_id": "C_kwDOVTgN29oAKDliNjhkMDkxMTU1MmQ4Yzg4MGE0NmNhNzI5ODBkM2Y5YWY5NzQzZWU",
+  "commit": {
+    "author": {
+      "name": "Bao, Lecheng",
+      "email": "129269449+Ganzhe2028@users.noreply.github.com",
+      "date": "2026-10-25T06:35:04Z"
+    },
+    "committer": {
+      "name": "GitHub",
+      "email": "noreply@github.com",
+      "date": "2026-10-25T06:35:04Z"
+    },
+    "message": "Make Douyin video link clickable in README\n\nUpdated README to include a clickable link for the Douyin video.",
+    "tree": {
+      "sha": "29de9e213ad91539ea9b6260db66ed65ec688cd9",
+      "url": "https://api.github.com/repos/Ganzhe2028/SunPet/git/trees/29de9e213ad91539ea9b6260db66ed65ec688cd9"
+    },
+    "url": "https://api.github.com/repos/Ganzhe2028/SunPet/git/commits/9b68d0911552d8c880a46ca72980d3f9af9743ee",
+    "comment_count": 0,
+    "verification": {
+      "verified": true,
+      "reason": "valid",
+      "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq3aMYCRC1aQ7uu5UhlAAAd/oQADxx6y/jhg9UDQ4v7Cb9yNna\n3YRprFFEoiXGXTe2iy+qW23yk5lhc1EZKLb/Q8CQ1ywbg3l5Y+3/tOQLEvBcJE8+\n5j3tu2a3YGOXDjq9KSoij/PuFinsKfPnfIoAtWU84+MEcPWjTwP43aP90m05R8ce\nrDfo8bVPbcSJnltHnLbrZoyCG5OIZi1WsH1VGQQwAXmkOmS6QR5Lqy7oyt8s7np8\nn293cQE1uDBkEeh1GHLqHl3nGAT+tOcawoZG6CyWXELJK5u8yHl82P7oYZUUy0hY\nM/uamP2XMQwqDn6bXYyu44nZos29KY21qx6LY1v/i4+21jGhKbf6m8Q8AeusEBfj\nNj7syxwHDlQ2sUT5TiURug8lgYvyhqACLJ33XkoR2mvJk0a4Z804edIl8yaHUd6N\nAqHAz2ZEIq4QGmXPpXPRjg735lJYK/2oEF/6LGBizE/OctNzuMDEfHFyB4/HMErM\nlaWZXQg9ZYNwWIPKP+l5eLJ8prZv0aQQVBDEPTNZemKBqKQ6kFAYzNLXJ16eMiQv\noquE/jCiAa9w5IeGBt+s8FkzOqYW+mFxZ0bew6ZwXQyL3xGY8lW3kPrMKbJxfc0A\n7Zw/UBGir71QLf8rI7HQY/7sSs1AOhei6xxkpGmebymZQjN7hqWx3RMAaufixFH7\npncDWMHjNPwnz2DgeF+O\n=Pxee\n-----END PGP SIGNATURE-----\n",
+      "payload": "tree 29de9e213ad91539ea9b6260db66ed65ec688cd9\nparent b2c764fec66fbdf7cb90844176ce297fe514675e\nauthor Bao, Lecheng <129269449+Ganzhe2028@users.noreply.github.com> 1792910104 +0800\ncommitter GitHub <noreply@github.com> 1792910104 +0800\n\nMake Douyin video link clickable in README\n\nUpdated README to include a clickable link for the Douyin video.",
+      "verified_at": "2026-10-25T06:35:05Z"
+    }
+  },
+  "url": "https://api.github.com/repos/Ganzhe2028/SunPet/commits/9b68d0911552d8c880a46ca72980d3f9af9743ee",
+  "html_url": "https://github.com/Ganzhe2028/SunPet/commit/9b68d0911552d8c880a46ca72980d3f9af9743ee",
+  "comments_url": "https://api.github.com/repos/Ganzhe2028/SunPet/commits/9b68d0911552d8c880a46ca72980d3f9af9743ee/comments",
+  "author": {
+    "login": "Ganzhe2028",
+    "id": 129269449,
+    "node_id": "U_kgDOB7R-yQ",
+    "avatar_url": "https://avatars.githubusercontent.com/u/129269449?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/Ganzhe2028",
+    "html_url": "https://github.com/Ganzhe2028",
+    "followers_url": "https://api.github.com/users/Ganzhe2028/followers",
+    "following_url": "https://api.github.com/users/Ganzhe2028/following{/other_user}",
+    "gists_url": "https://api.github.com/users/Ganzhe2028/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/Ganzhe2028/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/Ganzhe2028/subscriptions",
+    "organizations_url": "https://api.github.com/users/Ganzhe2028/orgs",
+    "repos_url": "https://api.github.com/users/Ganzhe2028/repos",
+    "events_url": "https://api.github.com/users/Ganzhe2028/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/Ganzhe2028/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "committer": {
+    "login": "web-flow",
+    "id": 19864447,
+    "node_id": "MDQ6VXNlcjE5ODY0NDQ3",
+    "avatar_url": "https://avatars.githubusercontent.com/u/19864447?v=4",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/web-flow",
+    "html_url": "https://github.com/web-flow",
+    "followers_url": "https://api.github.com/users/web-flow/followers",
+    "following_url": "https://api.github.com/users/web-flow/following{/other_user}",
+    "gists_url": "https://api.github.com/users/web-flow/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/web-flow/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/web-flow/subscriptions",
+    "organizations_url": "https://api.github.com/users/web-flow/orgs",
+    "repos_url": "https://api.github.com/users/web-flow/repos",
+    "events_url": "https://api.github.com/users/web-flow/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/web-flow/received_events",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": false
+  },
+  "parents": [
+    {
+      "sha": "b2c764fec66fbdf7cb90844176ce297fe514675e",
+      "url": "https://api.github.com/repos/Ganzhe2028/SunPet/commits/b2c764fec66fbdf7cb90844176ce297fe514675e",
+      "html_url": "https://github.com/Ganzhe2028/SunPet/commit/b2c764fec66fbdf7cb90844176ce297fe514675e"
+    }
+  ],
+  "stats": {
+    "total": 2,
+    "additions": 1,
+    "deletions": 1
+  },
+  "files": [
+    {
+      "sha": "cb8520807c1a2acbdee0c11e4a3233b588f2ae43",
+      "filename": "README.md",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "changes": 2,
+      "blob_url": "https://github.com/Ganzhe2028/SunPet/blob/9b68d0911552d8c880a46ca72980d3f9af9743ee/README.md",
+      "raw_url": "https://github.com/Ganzhe2028/SunPet/raw/9b68d0911552d8c880a46ca72980d3f9af9743ee/README.md",
+      "contents_url": "https://api.github.com/repos/Ganzhe2028/SunPet/contents/README.md?ref=9b68d0911552d8c880a46ca72980d3f9af9743ee",
+      "patch": "@@ -1,6 +1,6 @@\n <h1 align=\"center\">你说太对了 · SunPet</h1>\n \n-<p align=\"center\">(抖音原视频)[https://www.douyin.com/video/7700085577455188723]里那个点一下就说「太对了」的桌宠，现在住在你的 Mac 桌面上。</p>\n+<p align=\"center\"><a href=\"https://www.douyin.com/video/7700085577455188723\">抖音原视频</a>里那个点一下就说「太对了」的桌宠，现在住在你的 Mac 桌面上。</p>\n \n <p align=\"center\">仅 macOS 14+ · Apple Silicon ｜ <a href=\"https://github.com/Ganzhe2028/SunPet/releases/latest\"><b>下载安装包</b></a></p>\n "
+    }
+  ]
+}

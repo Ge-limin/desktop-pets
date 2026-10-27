@@ -1,0 +1,7 @@
+.local-media/
+.local-config/
+.local-evidence/
+build/
+.DS_Store
+__pycache__/
+*.pyc
