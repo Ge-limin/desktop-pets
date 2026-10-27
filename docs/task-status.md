@@ -1,8 +1,17 @@
 # Integration status / 整合状态
 
-Status: completed; compact-picker2.1/build3 installed in all five applications
+Status: completed;2.2/build4 installed and verified in all five apps
 Updated: 2026-10-27
-Owner: main Pi integration session. Shared picker subtask af802355-f7b9-4f2 completed; no delegated writes remain.
+Owner: main Pi integration session. Human reply policy e4a2c2ed-604b-42d completed/frozen. Menu appearance69287e19-a622-4bb froze its source before an aborted final response; main reviewed/compiled/tested its actual files. No ongoing writes.
+
+## Latest delivery / 最新交付
+
+- Human right-click settings now include “接谁的话” (each other peer independently selectable) and “接话方式 → 允许有限接龙（最多2轮）”. Missing preferences preserve original source defaults (Sun:both, GoodThing:Sun, Shaolan:none); empty means none. Default replies only to manual-hop0. Optional chaining permits incoming hop0/1, rejects negative/hop>=2;2 is maximum depth, NOT global total replies under branching. Incoming/queued/executing work is filtered; config changes cancel queued replies. Existing master switches remain unchanged. Master controls receiving/responding, while normal manual speech still broadcasts for other opted-in listeners. Shaolan's previously inert receiving path is wired to its real answer clips; GoodThing's obsolete root restriction removed. Protocol unchanged, no new service.
+- Double-click cat now immediately plays/restarts CURRENT cat's audio+animation without switching role. Explicit left random still shuffles across cats. Real double-event tests cover every cat twice, same-role/frame-zero/player replacement, no stacking, preserved volume/mute and menu random separately.
+- Left picker now uses system menu font/material/colors/shadow/separators/check gutter and borderless rows, without gray pills. Retains all-visible24pt compact columns and immediate nonmodal double-click behavior. It is a nonmodal AppKit panel styled with system menu primitives, NOT blocking NSMenu tracking; pixel-for-pixel equality with the system's private NSMenu implementation is not claimed. Main reviewed actual37-voice/tencat screenshots against the prior pill design.
+- Final frozen Shared compiled into ALL five2.2/build4 targets. All optimized builds, signature checks, isolated self-tests, new source-policy/cyclic-broadcast model/queued-work tests, native double-click and menu styling tests passed. No global test notifications were sent into live pets; cross-process listening/audio was not manually auditioned. Evidence: `.local-evidence/reply-policy/` (`menu-native-build.log`, `human-build.log`, picker PNG/review images, copied self-tests).
+- Replaced five verified installed2.1 bundles, gracefully restarted, verified exact tested executable hashes/signatures/version2.2, five normal apps and nine visible pets. All captured preexisting settings (including coordinates in this receipt) were retained; no existing disabled master was enabled. Installer wrote no preferences. `installed-audit.log` and before/after preference snapshots record this.
+- Media unchanged. No upload/release. After successful verification, old app copies, build/module cache and one-off install/window scripts were removed; necessary evidence and selected media retained.
 
 ## Current follow-up / 当前追加需求
 

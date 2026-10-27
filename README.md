@@ -8,7 +8,7 @@ One native interaction model for five local macOS pet apps. 一个仓库、一�
 |---|---|
 | Left click / 单击 | Immediately open the nonmodal content panel: random, stop and available items / 立即打开非阻塞内容面板：随机、停止、可选内容 |
 | Choose an item / 选一项 | Play once; for cats, replace the current window's cat and play its animation + sound / 播放一次；猫梗立即换成所选猫并播放动作＋声音 |
-| Double click / 双击 | Shuffle one item from that same panel / 从同一个内容列表洗牌选一个播放 |
+| Double click / 双击 | Cats: immediately replay the current cat; human/Nailong: shuffle a voice / 猫：立即播放当前猫的素材；真人/奶龙：随机一段语音 |
 | Drag / 拖动 | Move only, without triggering playback / 只移动，不触发播放 |
 | Right click / 右键 | Configuration only: volume, mute, size, Spaces, per-pet options, recover and close / 只配置：音量、静音、大小、显示范围、角色选项、恢复与关闭 |
 
@@ -17,6 +17,12 @@ The compact picker shows all items at once without scrolling (24pt rows, adaptiv
 The panel may briefly appear on the first click of a double-click; single-click is never delayed to conceal that. Same-pet playback is exclusive. Stop clears queued replies/playback. Mute keeps the saved volume; muted cats still animate. Positions and settings persist in normal use. Tests are silent and preference-isolated.
 
 双击的第一下允许列表短暂出现，不用半秒等待掩盖；同一只不叠音，停止会取消等待播放。静音不丢音量，猫静音仍有动作。正常模式保存设置，测试不污染用户偏好。
+
+Cross-cat shuffle is an explicit left-menu action, not the cat's double-click. 跨猫随机仅由左键菜单“随机播放”触发，不是双击猫的行为。
+
+Human autoreplies can select individual sources. By default they answer manual speech only; optional chaining is bounded to2 rounds, not2 global messages when multiple peers answer. The master switch controls receiving/responding; normal manual speech remains announceable for other opted-in listeners. Changing filters cancels pending replies.
+
+真人自动接话可逐个选择来源，默认只接手动播放；可选接龙最多2轮（多人回复时不是全局只发2句）。总开关控制本只是否接话，不阻止其他已开启且勾选它的桌宠听到其手动播放。修改筛选会取消等待中的回复。
 
 ## Targets / 应用
 

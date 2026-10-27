@@ -6,11 +6,25 @@ private final class VoicePickerPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
-private final class VoicePickerDocument: NSView {
+private final class VoicePickerDocument: NSVisualEffectView {
     override var isFlipped: Bool { true }
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        material = .menu; blendingMode = .behindWindow; state = .active
+        wantsLayer = true
+        layer?.cornerRadius = 6; layer?.masksToBounds = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 }
 final class VoicePickerButton: NSButton {
     let item: NSMenuItem
+    private var hoverTracking: NSTrackingArea?
+    private(set) var isHovered = false
+    var showsMenuHighlight: Bool { isEnabled && (isHovered || isHighlighted) }
+    var menuTextColor: NSColor {
+        !isEnabled ? .disabledControlTextColor : (showsMenuHighlight ? .selectedMenuItemTextColor : .labelColor)
+    }
+    override var isFlipped: Bool { true }
     init(item: NSMenuItem) {
         self.item = item
         super.init(frame: .zero)
@@ -18,13 +32,50 @@ final class VoicePickerButton: NSButton {
         image = item.image; imagePosition = item.image == nil ? .noImage : .imageLeft
         imageScaling = .scaleProportionallyDown
         action = #selector(ImmediateVoicePicker.choose(_:))
-        bezelStyle = .rounded; controlSize = .small; alignment = .left
-        font = .systemFont(ofSize: 13); lineBreakMode = .byTruncatingTail
+        isBordered = false; focusRingType = .none; controlSize = .small; alignment = .left
+        setButtonType(.momentaryChange); state = item.state
+        font = .menuFont(ofSize: 0); lineBreakMode = .byTruncatingTail
         toolTip = item.title; tag = item.tag
         isEnabled = item.isEnabled && (item.action != nil || item.submenu != nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        let tracking = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(tracking); hoverTracking = tracking
+    }
+    override func mouseEntered(with event: NSEvent) { isHovered = true; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false; needsDisplay = true }
+    override func highlight(_ flag: Bool) { super.highlight(flag); needsDisplay = true }
+    // Keep NSButton's action/press handling, but not its bezel or disabled fill.
+    // This is a nonmodal panel styled with AppKit menu primitives, not NSMenu tracking.
+    override func draw(_ dirtyRect: NSRect) {
+        if showsMenuHighlight {
+            NSColor.selectedContentBackgroundColor.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
+        }
+        let menuFont = font ?? .menuFont(ofSize: 0)
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
+        let attributes: [NSAttributedString.Key: Any] = [.font: menuFont, .foregroundColor: menuTextColor, .paragraphStyle: paragraph]
+        let textHeight = ("Ag" as NSString).size(withAttributes: attributes).height
+        let textY = (bounds.height-textHeight)/2
+        // Native menus reserve the leading gutter for state, separate from icons.
+        if item.state != .off {
+            let mark = item.state == .on ? "✓" : "−"
+            (mark as NSString).draw(in: NSRect(x: 4, y: textY, width: 16, height: textHeight), withAttributes: attributes)
+        }
+        var textX: CGFloat = 24
+        if let image, image.size.width > 0, image.size.height > 0 {
+            let scale = min(1, min(18/image.size.width, 18/image.size.height))
+            let size = NSSize(width: image.size.width*scale, height: image.size.height*scale)
+            image.draw(in: NSRect(x: textX+(18-size.width)/2, y: (bounds.height-size.height)/2, width: size.width, height: size.height),
+                       from: .zero, operation: .sourceOver, fraction: isEnabled ? 1 : 0.45, respectFlipped: true, hints: nil)
+            textX += 24
+        }
+        (title as NSString).draw(in: NSRect(x: textX, y: textY, width: max(0, bounds.width-textX-8), height: textHeight), withAttributes: attributes)
+    }
 }
 
 final class ImmediateVoicePicker: NSObject {
@@ -111,7 +162,7 @@ final class ImmediateVoicePicker: NSObject {
         let panel = VoicePickerPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.hidesOnDeactivate = false
         panel.level = .popUpMenu; panel.hasShadow = true
-        panel.backgroundColor = .windowBackgroundColor
+        panel.isOpaque = false; panel.backgroundColor = .clear
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.title = "声音 / Voices"
         let document = VoicePickerDocument(frame: NSRect(origin: .zero, size: frame.size))
@@ -216,11 +267,11 @@ func checkImmediateVoiceGestures(view: NSView, cancel: () -> Void, plays: () -> 
             view.mouseDown(with: event(.leftMouseDown, count))
             check(!picker.isVisible && picker.monitorCount == 0 && picker.observerCount == 0, "second down immediately tears down picker/monitors")
             view.mouseUp(with: event(.leftMouseUp, count))
-            check(plays() == n+1 && !picker.isVisible, "fast/slow double (count=\(count)) random exactly once")
+            check(plays() == n+1 && !picker.isVisible, "fast/slow double (count=\(count)) plays exactly once")
         }
     }
     fresh(); single(); let n = plays(); time += NSEvent.doubleClickInterval+0.1; single()
-    check(picker.isVisible && plays() == n, "separated singles reopen list, never random")
+    check(picker.isVisible && plays() == n, "separated singles reopen list, never play")
     for second in [false, true] {
         fresh(); if second { single(); time += NSEvent.doubleClickInterval*0.3 }
         let origin = host.frame.origin, n = plays(), count = second ? 2 : 1
@@ -234,7 +285,7 @@ func checkImmediateVoiceGestures(view: NSView, cancel: () -> Void, plays: () -> 
     view.mouseDown(with: event(.leftMouseDown, 2)); view.mouseUp(with: event(.leftMouseUp, 2))
     time += NSEvent.doubleClickInterval*0.1
     view.mouseDown(with: event(.leftMouseDown, 3)); view.mouseUp(with: event(.leftMouseUp, 3))
-    check(plays() == tripleBefore+1 && !picker.isVisible, "third click cannot add another random or popup")
+    check(plays() == tripleBefore+1 && !picker.isVisible, "third click cannot add another playback or popup")
     fresh(); let tiny = plays()
     view.mouseDown(with: event(.leftMouseDown)); view.mouseDragged(with: event(.leftMouseDragged, 1, 1))
     view.mouseUp(with: event(.leftMouseUp, 1, 1))
@@ -319,11 +370,34 @@ func checkImmediateVoiceList(view: NSView, menu: NSMenu, check: (Bool, String) -
             view is NSScrollView || view is NSScroller || view is NSClipView || view.subviews.contains(where: hasScrolling)
         }
         check(!hasScrolling(content), "no scroll view, scrollers, or clipping wrapper")
+        let material = content as? NSVisualEffectView
+        check(material?.material == .menu && material?.blendingMode == .behindWindow && material?.state == .active,
+              "native system menu material, not an opaque control background")
+        check(picker.panel?.isOpaque == false && picker.panel?.backgroundColor == NSColor.clear && picker.panel?.hasShadow == true,
+              "transparent popup with native window shadow")
+        check(content.appearance == nil && picker.panel?.appearance == nil, "popup inherits system light/dark appearance")
         check(content.subviews.allSatisfy { content.bounds.contains($0.frame) }, "every control and separator fits visible content bounds")
         for (index, button) in picker.buttons.enumerated() {
             check(button.superview === content && content.bounds.contains(button.frame), "each button directly visible without scrolling")
             check(button.frame.height == 24 && (button.font?.pointSize ?? 0) >= 12 && (button.font?.pointSize ?? 0) <= 13, "dense 24pt rows with 12–13pt text")
             check(button.title == button.item.title && button.tag == button.item.tag && button.image === button.item.image, "titles, tags and cat thumbnails unchanged")
+            check(!button.isBordered && button.layer?.backgroundColor == nil && button.font == NSFont.menuFont(ofSize: 0),
+                  "borderless menu-font rows without gray button/header backgrounds")
+            check(button.state == button.item.state && button.action == #selector(ImmediateVoicePicker.choose(_:)) && button.target === picker,
+                  "native left state gutter retains selection and original action routing")
+            if let hover = NSEvent.mouseEvent(with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                                             windowNumber: 0, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) {
+                button.mouseEntered(with: hover)
+                check(button.showsMenuHighlight == button.isEnabled, "only actionable rows highlight on hover")
+                check(button.menuTextColor == (button.isEnabled ? NSColor.selectedMenuItemTextColor : NSColor.disabledControlTextColor),
+                      "hover/disabled text uses semantic menu colors")
+                button.mouseExited(with: hover)
+                check(!button.showsMenuHighlight && button.menuTextColor == (button.isEnabled ? NSColor.labelColor : NSColor.disabledControlTextColor),
+                      "idle rows have no highlight; disabled headers remain plain text")
+                button.highlight(true)
+                check(button.showsMenuHighlight == button.isEnabled, "press highlight never paints disabled headers")
+                button.highlight(false)
+            }
             for other in picker.buttons.dropFirst(index+1) {
                 check(!button.frame.intersects(other.frame), "real button hit regions never overlap")
             }

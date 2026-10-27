@@ -165,6 +165,7 @@ extension AppDelegate {
         if defaults.object(forKey: "allSpaces") != nil { allSpaces = defaults.bool(forKey: "allSpaces") }
         if defaults.object(forKey: "bridgeEnabled") != nil { bridgeEnabled = defaults.bool(forKey: "bridgeEnabled") }
         else if defaults.object(forKey: "bridgeDisabled") != nil { bridgeEnabled = !defaults.bool(forKey: "bridgeDisabled") }
+        loadReplyPreferences()
     }
     func cancelCompanion() {
         companionGeneration += 1
@@ -221,6 +222,7 @@ extension AppDelegate {
         }
         scope.submenu = scopeMenu; menu.addItem(scope)
         let reply = item("自动接话", #selector(toggleBridge)); reply.state = bridgeEnabled ? .on : .off; menu.addItem(reply)
+        appendReplySettings(to: menu)
         menu.addItem(.separator()); menu.addItem(item("恢复位置", #selector(resetPosition)))
         menu.addItem(item("关闭这只（退出本应用）", #selector(quit)))
         menu.addItem(item("退出本应用", #selector(quit)))
@@ -249,20 +251,7 @@ extension AppDelegate {
             visualSizeAction(item("", nil, tag: height)); loadUnifiedPreferences()
             check(abs(visualHeight - CGFloat(height)) < 0.01, "visual size preset persists \(height)")
         }
-        player?.stop(); companionPool = clips; companionBag = []; bridgeEnabled = true
-        scheduleCompanion(after: 1, hop: 3, root: .shaolan)
-        check(companionWork == nil, "bounded hop rejects hop 3")
-        scheduleCompanion(after: 1, hop: 1, root: .shaolan)
-        let pending = companionWork; let before = testPlaybackIDs.count
-        check(pending != nil, "real automatic reply queue was created")
-        stopAction(); pending?.perform()
-        check(companionWork == nil && player?.isPlaying != true && testPlaybackIDs.count == before, "stop cancels queued autoreply, stale work cannot play")
-        scheduleCompanion(after: 1, hop: 1, root: .shaolan); let disabledWork = companionWork
-        toggleBridge(); disabledWork?.perform()
-        check(!bridgeEnabled && !defaults.bool(forKey: "bridgeEnabled") && companionWork == nil && player?.isPlaying != true, "bridge off saves and cancels queued autoreply")
-        toggleBridge(); play(clips[0]); scheduleCompanion(after: 1, hop: 1, root: .shaolan)
-        check(companionWork == nil && player?.isPlaying == true && player?.volume == 0, "automatic reply cannot steal manual real silent playback")
-        stopAction()
+        runReplyConfigurationSelfTest(check: check)
         check(!defaults.bool(forKey: "motionEnabled") && !motionEnabled, "motion is opt-in, no default hardware probe")
         toggleMotion(); check(motionEnabled && defaults.bool(forKey: "motionEnabled") && motion.process == nil && motion.listener == nil, "motion toggle saves without test hardware activity")
         toggleMotion(); check(!motionEnabled && !defaults.bool(forKey: "motionEnabled"), "motion off persists")

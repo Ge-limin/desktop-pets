@@ -145,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var clips: [Clip] = []
     var allClipsBag = AllClipsShuffle()
     var testPlaybackIDs: [Int] = []
+    var testAnnouncements: [(hop: Int, root: PetRole)] = []
     var testPresentedMenus: [NSMenu] = []
     var bag = ShuffleBag()
     var lastPlayed: Int?
@@ -159,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var volume: Float = 0.65
     var size: CGFloat = 260
     var imageRatio: CGFloat = 1
-    // 捧哏联动：接在太对了后面，形成 峰哥 → 太对了 → 薄肌 的链。
+    // 默认只说不接；可在右键菜单独立选择接话来源。
     let bridge = PetBridge(me: .shaolan, peers: [])
     var bridgeStatus = "联动：只说不接"
     var bridgeEnabled = true
@@ -250,6 +251,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         status.button?.toolTip = "单击全部声音 · 双击全量随机 · 拖动移动 · 右键设置"
         status.button?.target = self; status.button?.action = #selector(openStatusMenu)
         updateToolTip()
+        companionPool = clips.filter { $0.answer == true }
+        preloadCompanionClips()
         }
         if selfTest { runSelfTest() } else if bridgeTest { startBridge(); runBridgeTest() } else { startBridge(); showCaption("单击选声音 · 双击全量随机 · 右键设置", seconds: 5) }
     }
@@ -269,38 +272,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     }
 
     func startBridge() {
-        // 只说不接：薄肌的话由太对了接，它自己不等任何人。
-        // 接话那套（scheduleCompanion / playCompanion / preloadCompanionClips）留着没删，
-        // 哪天要它开口接话，peers 加一个角色、这里补一行 onSpoke 就能开。
-        guard bridgeEnabled, !selfTest else { return }
-        bridge.start()
+        guard bridgeEnabled else { return }
+        bridge.onPresenceChange = { [weak self] _ in self?.updateBridgeStatus() }
+        bridge.onSpoke = { [weak self] from, duration, _, _, hop, root in
+            self?.traceLog("收到 \(from.title) 的话 hop=\(hop) root=\(root.title)")
+            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root)
+        }
+        // Tests exercise the real callback/queue but never join the live notification bus.
+        if !selfTest { bridge.start(); updateBridgeStatus() }
     }
 
-    /// 逗哏说完之后排一次接话。
-    func scheduleCompanion(after duration: TimeInterval) {
-        guard bridgeEnabled, player?.isPlaying != true else { return }
+    func updateBridgeStatus() {
+        bridgeStatus = bridge.peers.isEmpty ? "联动：只说不接" : "联动：\(bridge.peerSummary)"
+    }
+
+    /// hop is the incoming event's depth. Only a successful reply increments it.
+    func scheduleCompanion(from: PetRole, after duration: TimeInterval, hop: Int, root: PetRole) {
+        guard bridgeEnabled, bridge.accepts(from: from, hop: hop), !companionPool.isEmpty,
+              duration.isFinite, duration >= 0 else { return }
+        guard player?.isPlaying != true else { return } // manual playback always wins
         cancelCompanion()
         let generation = companionGeneration
-        // 先把要接的那句定下来：每句开头静音长短不同，起播时刻得按它自己的静音补。
         guard let clip = takeCompanionClip() else { return }
         let lead = companionLead[clip.id] ?? 0
         let delay = max(0.02, duration - companionOverlap - lead)
+        traceLog("排接话 hop=\(hop) root=\(root.title) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.bridgeEnabled, self.companionGeneration == generation else { return }
-            guard self.player?.isPlaying != true else { return }
-            self.playCompanion(clip)
+            guard let self, self.bridgeEnabled, self.companionGeneration == generation,
+                  self.bridge.accepts(from: from, hop: hop), !self.excludedIDs.contains(clip.id),
+                  self.player?.isPlaying != true else { return }
+            self.companionWork = nil
+            self.traceLog("开口 hop=\(hop + 1) 句=\(clip.id) \(clip.label)")
+            self.playCompanion(clip, hop: hop + 1, root: root)
         }
         companionWork = work
         if !selfTest { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) }
     }
 
     func takeCompanionClip() -> Clip? {
-        if companionBag.isEmpty { companionBag = companionPool.shuffled() }
+        companionBag.removeAll { excludedIDs.contains($0.id) }
+        if companionBag.isEmpty {
+            companionBag = companionPool.filter { !excludedIDs.contains($0.id) }.shuffled()
+        }
         return companionBag.popLast()
     }
 
-    func playCompanion(_ clip: Clip) {
-        guard bridgeEnabled, player?.isPlaying != true else { return }
+    func playCompanion(_ clip: Clip, hop: Int, root: PetRole) {
+        guard bridgeEnabled, (1...2).contains(hop), player?.isPlaying != true else { return }
         if let ready = companionPlayers[clip.id] {
             player?.stop()
             player = ready
@@ -311,11 +329,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
                 pet.animate(true)
                 showCaption(clip.label, seconds: ready.duration + 0.5)
                 traceLog("开口 句=\(clip.id) \(clip.label)")
-                if bridgeEnabled && !selfTest { bridge.announceSpeaking(clipID: clip.id, duration: ready.duration, label: clip.label) }
+                announcePlayback(clip, duration: ready.duration, hop: hop, root: root)
                 return
             }
         }
-        play(clip)
+        play(clip, hop: hop, root: root)
     }
 
     func preloadCompanionClips() {
@@ -381,7 +399,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         guard let id = bag.next(from: ids), let clip = clips.first(where: { $0.id == id }) else { return }
         play(clip)
     }
-    func play(_ clip: Clip) {
+    func play(_ clip: Clip, hop: Int = 0, root: PetRole? = nil) {
         cancelCompanion()
         if selfTest { testPlaybackIDs.append(clip.id) }
         player?.stop(); pet.animate(false)
@@ -392,7 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
             lastPlayed = clip.id; pet.animate(true); showCaption(clip.label, seconds: audio.duration + 0.4)
             // 自己说完也广播：链上下一环（太对了）要接我的话。
             traceLog("开口 句=\(clip.id) \(clip.label) 时长=\(String(format: "%.2f", audio.duration))")
-            if bridgeEnabled && !selfTest { bridge.announceSpeaking(clipID: clip.id, duration: audio.duration, label: clip.label) }
+            announcePlayback(clip, duration: audio.duration, hop: hop, root: root)
         } catch { showCaption("这句暂时无法播放", seconds: 4) }
     }
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {

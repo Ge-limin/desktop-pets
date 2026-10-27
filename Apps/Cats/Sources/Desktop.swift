@@ -82,7 +82,7 @@ final class PetController: NSObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.isMovableByWindowBackground = false; panel.contentView = view
         view.owner = self; view.autoresizingMask = [.width, .height]
-        view.toolTip = "单击选猫并播放 · 双击随机换猫播放 · 拖拽移动 · 右键设置（不合成声音，不参与接话）"
+        view.toolTip = "单击选猫并播放 · 双击立即播放当前猫 · 拖拽移动 · 右键设置（不合成声音，不参与接话）"
         panel.title = "\(cat.metadata.name) #\(id) · 猫梗桌宠"
         audio.changed = { [weak self] in self?.audioChanged() }
         if let screen = NSScreen.main ?? NSScreen.screens.first {
@@ -167,10 +167,10 @@ final class PetController: NSObject {
         guard !closed, model.down else { return }
         model.drag(eventPoint(event))
         let click = model.release() && !suppressClick
-        let random = doublePress
+        let playCurrent = doublePress
         doublePress = false; suppressClick = false; returnToScreen()
         if click {
-            if random { randomVoice() }
+            if playCurrent { playCurrentCat() }
             else { ImmediateVoicePicker.shared.show(soundMenu(), beside: view) }
         }
         app?.savePreferences()
@@ -271,6 +271,10 @@ final class PetController: NSObject {
         menu.addItem(item("关闭本只", #selector(closeThis)))
         menu.addItem(.separator()); app?.addGlobalItems(to: menu)
         return menu
+    }
+    func playCurrentCat() {
+        cancelGesture(); guard !closed else { return }
+        audio.playRandom() // Current cat's clips only; replaces/restarts any active playback.
     }
     @objc func randomVoice() {
         cancelGesture(); guard !closed, let app else { return }

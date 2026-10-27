@@ -116,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var clips: [Clip] = []
     var allClipsBag = AllClipsShuffle()
     var testPlaybackIDs: [Int] = []
+    var testAnnouncements: [(hop: Int, root: PetRole)] = []
     var testPresentedMenus: [NSMenu] = []
     var bag: [Int] = []
     var lastID: Int?
@@ -277,56 +278,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
             player = audio; audio.delegate = self; audio.volume = effectiveVolume; audio.prepareToPlay()
             guard audio.play() else { throw NSError(domain:"音频播放失败",code:1) }
             lastID = clip.id; pet.animate(true); showCaption(clip.label,seconds:audio.duration+0.5)
-            // 自己说完也广播，链上下一环（峰哥）要接我的话。hop 原样带出去。
-            if bridgeEnabled && !selfTest { bridge.announceSpeaking(clipID: clip.id, duration: audio.duration, label: clip.label, hop: hop, root: root) }
+            // 接收开关不影响手动广播；自动回复保留 hop/root。
+            announcePlayback(clip, duration: audio.duration, hop: hop, root: root)
         } catch { pet.animate(false); showCaption("播放失败：\(error.localizedDescription)",seconds:5) }
     }
     // MARK: - 捧哏联动
 
     func startBridge() {
-        guard bridgeEnabled, !selfTest else { return }
+        guard bridgeEnabled else { return }
         bridge.onPresenceChange = { [weak self] present in
             guard let self else { return }
-            self.bridgeStatus = "自动接话：\(self.bridge.peerSummary)"
+            self.updateBridgeStatus()
             guard self.bridgeEnabled else { return }
             self.showCaption(present ? "自动接话就绪 · \(self.bridge.peerSummary)说完我接" : "自动接话：等待其他桌宠", seconds: 4)
         }
-        // 峰哥和薄肌谁说都接，接话池是同一个（28 句「太对了」本来就不挑对象）。
         bridge.onSpoke = { [weak self] from, duration, _, _, hop, root in
-            self?.traceLog("收到 \(from.title) 的话 hop=\(hop) root=\(root.title) 时长=\(String(format: "%.2f", duration))")
-            self?.scheduleCompanion(after: duration, hop: hop, root: root)
+            self?.traceLog("收到 \(from.title) 的话 hop=\(hop) root=\(root.title)")
+            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root)
         }
-        bridge.start()
-        bridgeStatus = "自动接话：\(bridge.peerSummary)"
-        // 启动那句提示占着字幕，等它退了再报自己的状态。
-        if bridgeEnabled && bridge.peerIsRunning {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-                guard let self, self.bridgeEnabled, self.bridge.peerIsRunning else { return }
-                if self.player?.isPlaying != true { self.showCaption("自动接话就绪 · \(self.bridge.peerSummary)说完我接", seconds: 4) }
+        // Tests exercise the real callback/queue but never join the live notification bus.
+        if !selfTest {
+            bridge.start(); updateBridgeStatus()
+            if bridge.peerIsRunning {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+                    guard let self, self.bridgeEnabled, self.bridge.peerIsRunning else { return }
+                    if self.player?.isPlaying != true { self.showCaption("自动接话就绪 · \(self.bridge.peerSummary)说完我接", seconds: 4) }
+                }
             }
         }
     }
 
-    /// 逗哏说完之后排一次接话。
-    func scheduleCompanion(after duration: TimeInterval, hop: Int, root: PetRole) {
-        guard bridgeEnabled, player?.isPlaying != true else { return }
-        // 薄肌 → 太对了 → 峰哥 → 太对了，到这里是第四跳。再往下接就多出来了。
-        guard hop < 3 else { return }
-        // 被连点时只留最后一次的捧哏，不然会连播几句叠不上节奏。
+    func updateBridgeStatus() {
+        bridgeStatus = bridge.peers.isEmpty ? "联动：只说不接" : "联动：\(bridge.peerSummary)"
+    }
+
+    /// hop is the incoming event's depth. Only a successful reply increments it.
+    func scheduleCompanion(from: PetRole, after duration: TimeInterval, hop: Int, root: PetRole) {
+        guard bridgeEnabled, bridge.accepts(from: from, hop: hop), !companionPool.isEmpty,
+              duration.isFinite, duration >= 0 else { return }
+        guard player?.isPlaying != true else { return } // manual playback always wins
         cancelCompanion()
         let generation = companionGeneration
-        // 先把要接的那句定下来：每句开头静音长短不同，起播时刻得按它自己的静音补。
         guard let clip = takeCompanionClip() else { return }
         let lead = companionLead[clip.id] ?? 0
-        // 目标是「对方那句还剩 overlap 秒的时候，捧哏的第一个字正好出来」。
-        // 第二跳（太对了接完轮到峰哥）比默认压紧 0.1 秒，四步连起来才不拖。
         let overlap = hop == 1 ? max(0.05, companionOverlap - 0.1) : companionOverlap
         let delay = max(0.02, duration - overlap - lead)
-        traceLog("排接话 hop=\(hop) root=\(root.title) 重叠=\(String(format: "%.2f", overlap)) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
+        traceLog("排接话 hop=\(hop) root=\(root.title) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.bridgeEnabled, self.companionGeneration == generation else { return }
-            // 自己正说着（手点或摇机身）就不叠上去，这一捧算了。
-            guard self.player?.isPlaying != true else { return }
+            guard let self, self.bridgeEnabled, self.companionGeneration == generation,
+                  self.bridge.accepts(from: from, hop: hop), !self.excludedIDs.contains(clip.id),
+                  self.player?.isPlaying != true else { return }
+            self.companionWork = nil
             self.traceLog("开口 hop=\(hop + 1) 句=\(clip.id) \(clip.label)")
             self.playCompanion(clip, hop: hop + 1, root: root)
         }
@@ -335,12 +337,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     }
 
     func takeCompanionClip() -> Clip? {
-        if companionBag.isEmpty { companionBag = companionPool.shuffled() }
+        companionBag.removeAll { excludedIDs.contains($0.id) }
+        if companionBag.isEmpty {
+            companionBag = companionPool.filter { !excludedIDs.contains($0.id) }.shuffled()
+        }
         return companionBag.popLast()
     }
 
     func playCompanion(_ clip: Clip, hop: Int, root: PetRole) {
-        guard bridgeEnabled, player?.isPlaying != true else { return }
+        guard bridgeEnabled, (1...2).contains(hop), player?.isPlaying != true else { return }
         // 用预解码好的 player 直接起播，绕过 play() 里「读文件再解码」那几十毫秒。
         // 捧哏靠的就是准点，起播晚一点整段节奏就散了。
         if let ready = companionPlayers[clip.id] {
@@ -352,7 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
                 lastID = clip.id
                 pet.animate(true)
                 showCaption(clip.label, seconds: ready.duration + 0.5)
-                if bridgeEnabled && !selfTest { bridge.announceSpeaking(clipID: clip.id, duration: ready.duration, label: clip.label, hop: hop, root: root) }
+                announcePlayback(clip, duration: ready.duration, hop: hop, root: root)
                 return
             }
         }

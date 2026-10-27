@@ -5,17 +5,10 @@ import Foundation
 //
 // 一对多，带跳数限制。每个人说的话所有人都能听见，但只听自己配置里那几个。
 //
-// 当前结构「薄肌起头，四步收尾」：
-//     薄肌 ──> 太对了 ──> 峰哥 ──> 太对了
-//
-// 峰哥只在「薄肌起的这条链」里接话。用户自己点峰哥，只有太对了接一句就停，
-// 不会把峰哥自己再带出来一次。峰哥和薄肌之间没有直接通道。
-//
-// 两个字段控制这条链：
-//   hop  —— 这句是第几跳，用户自己点的算 0。接话的人广播 hop + 1。
-//   root —— 这条链是谁起的头，一路原样传下去。
-// 太对了最多接 hop = 2 的（第三跳），广播出去 hop = 3 之后没人再接。
-// 这就是防环的手段：不靠拓扑，靠跳数封顶。
+// 默认只接用户手动播放（hop = 0）。明确开启有限接龙后可接 hop = 1，
+// 回复广播 hop + 1；hop >= 2 或负数一律不接，环形配置也最多两轮。
+// root 仍为起点角色并原样传递。这是深度上限，不是广播分叉的总句数预算。
+// 自动接话开关只控制收听；手动播放不依赖收听定时器，仍可广播。
 //
 // 通道用 DistributedNotificationCenter：同一个用户会话里跨进程直达，实测 5ms 左右，
 // 不要权限、不开端口、不碰网络。对方在不在跑用 NSRunningApplication 查 bundle id，
@@ -46,7 +39,9 @@ enum PetBridgeSignal {
 final class PetBridge: NSObject {
     let me: PetRole
     /// 我要接谁的话。空数组 = 只说不接。
-    let peers: [PetRole]
+    private(set) var peers: [PetRole]
+    let defaultPeers: [PetRole]
+    private(set) var allowChaining = false
 
     /// 我听的那几个人，从「都不在」变成「有人在」或反过来时调用，主线程。
     var onPresenceChange: ((Bool) -> Void)?
@@ -61,7 +56,19 @@ final class PetBridge: NSObject {
     init(me: PetRole, peers: [PetRole]) {
         self.me = me
         self.peers = peers.filter { $0 != me }
+        self.defaultPeers = self.peers
         super.init()
+    }
+
+    func configure(peers: [PetRole], allowChaining: Bool) {
+        self.peers = PetRole.allCases.filter { $0 != me && peers.contains($0) }
+        self.allowChaining = allowChaining
+        if started { pollPresence() }
+    }
+
+    /// Both the notification ingress and delayed playback use this same policy.
+    func accepts(from: PetRole, hop: Int) -> Bool {
+        from != me && peers.contains(from) && hop >= 0 && hop < 2 && (hop == 0 || allowChaining)
     }
 
     /// 我要听的那几个里，此刻谁在跑。查 bundle id 而不是看通知，对方崩掉也能如实反映。
@@ -123,7 +130,7 @@ final class PetBridge: NSObject {
     ///   - root: 这条链的起点。用户自己点的传 nil（就是我自己），接话时原样传下去。
     func announceSpeaking(clipID: Int, duration: TimeInterval, label: String,
                           hop: Int = 0, root: PetRole? = nil) {
-        guard started, anyoneElseRunning else { return }
+        guard anyoneElseRunning, (0...2).contains(hop) else { return }
         let info: [String: Any] = [
             "from": me.rawValue,
             "clipID": clipID,
@@ -148,16 +155,18 @@ final class PetBridge: NSObject {
 
     @objc private func handleSpoke(_ note: Notification) {
         guard started, let info = note.userInfo else { return }
-        // 只认我配置里那几个人说的，并且一定不是我自己。
-        // from != me 这行是死线：接自己的话会变成无限循环。
-        guard let raw = info["from"] as? String,
-              let from = PetRole(rawValue: raw),
-              from != me,
-              peers.contains(from) else { return }
+        receiveSpeaking(info)
+    }
+
+    /// Pure ingress seam: self-tests inject dictionaries without observing/posting global notifications.
+    func receiveSpeaking(_ info: [AnyHashable: Any]) {
+        guard let raw = info["from"] as? String, let from = PetRole(rawValue: raw) else { return }
+        let hop = (info["hop"] as? Int) ?? 0
+        guard accepts(from: from, hop: hop) else { return }
         let duration = (info["duration"] as? Double) ?? 1.0
+        guard duration.isFinite, duration >= 0 else { return }
         let clipID = (info["clipID"] as? Int) ?? 0
         let label = (info["label"] as? String) ?? ""
-        let hop = (info["hop"] as? Int) ?? 0
         let root = (info["root"] as? String).flatMap(PetRole.init(rawValue:)) ?? from
         onSpoke?(from, duration, clipID, label, hop, root)
     }
