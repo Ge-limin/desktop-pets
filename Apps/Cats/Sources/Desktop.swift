@@ -171,7 +171,7 @@ final class PetController: NSObject {
         doublePress = false; suppressClick = false; returnToScreen()
         if click {
             if playCurrent { playCurrentCat() }
-            else { ImmediateVoicePicker.shared.show(soundMenu(), beside: view) }
+            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence) }
         }
         app?.savePreferences()
     }
@@ -179,8 +179,8 @@ final class PetController: NSObject {
         clickSequence.cancel()
         if let event {
             if let menuPresenter { menuPresenter(menu); return }
-            NSMenu.popUpContextMenu(menu, with: event, for: view)
-        } else { ImmediateVoicePicker.shared.show(menu, beside: view) }
+            NativePetMenu.shared.present(menu, for: view, event: event)
+        } else { NativePetMenu.shared.present(menu, for: view, sequence: clickSequence) }
     }
     func soundMenu() -> NSMenu {
         let menu = NSMenu()

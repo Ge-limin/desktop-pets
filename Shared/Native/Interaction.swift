@@ -1,6 +1,6 @@
 import AppKit
 
-// Native drag/click discriminator; no spring deformation or hold action.
+// Shared by Cats and Nailong: movement never becomes playback, squeeze or hold action.
 final class Interaction {
     private(set) var down = false
     private(set) var dragging = false

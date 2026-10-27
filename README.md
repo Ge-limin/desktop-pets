@@ -6,15 +6,17 @@ One native interaction model for five local macOS pet apps. 一个仓库、一�
 
 | Gesture / 操作 | Behavior / 行为 |
 |---|---|
-| Left click / 单击 | Immediately open the nonmodal content panel: random, stop and available items / 立即打开非阻塞内容面板：随机、停止、可选内容 |
+| Left click / 单击 | Immediately open the native NSMenu: random, stop and all available items / 立即打开原生NSMenu：随机、停止、全部可选内容 |
 | Choose an item / 选一项 | Play once; for cats, replace the current window's cat and play its animation + sound / 播放一次；猫梗立即换成所选猫并播放动作＋声音 |
 | Double click / 双击 | Cats: immediately replay the current cat; human/Nailong: shuffle a voice / 猫：立即播放当前猫的素材；真人/奶龙：随机一段语音 |
 | Drag / 拖动 | Move only, without triggering playback / 只移动，不触发播放 |
 | Right click / 右键 | Configuration only: volume, mute, size, Spaces, per-pet options, recover and close / 只配置：音量、静音、大小、显示范围、角色选项、恢复与关闭 |
 
-The compact picker shows all items at once without scrolling (24pt rows, adaptive columns for long lists). 紧凑列表无滚动条，24pt行高；长列表自动分列，所有选项同时可见。
+Both left and right use the same shared native NSMenu presenter—no custom popup, painted rows or gray button blocks. Items use native compact metrics; a display too short for the whole list follows the system's overflow behavior, rather than a fabricated multicolumn menu.
 
-The panel may briefly appear on the first click of a double-click; single-click is never delayed to conceal that. Same-pet playback is exclusive. Stop clears queued replies/playback. Mute keeps the saved volume; muted cats still animate. Positions and settings persist in normal use. Tests are silent and preference-isolated.
+左右键统一调用同一个原生NSMenu入口，不再自绘面板/行样式或灰色按钮块。采用系统菜单紧凑尺寸；屏幕确实放不下全部条目时遵循原生溢出行为，不再伪造多列系统菜单。
+
+The native menu may briefly appear on the first click of a double-click; single-click is never delayed to conceal that. Same-pet playback is exclusive. Stop clears queued replies/playback. Mute keeps the saved volume; muted cats still animate. Positions and settings persist in normal use. Tests are silent and preference-isolated.
 
 双击的第一下允许列表短暂出现，不用半秒等待掩盖；同一只不叠音，停止会取消等待播放。静音不丢音量，猫静音仍有动作。正常模式保存设置，测试不污染用户偏好。
 
@@ -33,6 +35,8 @@ Human autoreplies can select individual sources. By default they answer manual s
 | `goodthing` | 好事桌宠 | 11 clips, explicit autoreply switch / 11原声、明确自动接话开关 |
 | `nailong` | 奶龙桌宠 | Six clips, 1–3 independent pets; no overlapping/held laughter / 6原声、1–3只；不再叠音或长按循环 |
 | `cats` | 猫梗桌宠 | Ten local cat memes; one role = one full audiovisual item; 1–3 windows / 10猫梗，一个角色就是一个完整音画项，最多3窗 |
+
+Cats display no playback metadata caption such as “原片音轨”; only genuine playback errors are shown. 猫播放时不显示“原片音轨”等素材说明，只保留真正的错误提示。
 
 Cats preserve source actions (including Happy's dance and Oiiai's rotation) as transparent fixed-canvas frames, timed by actual audio playback. A 32MiB frame cache per active window bounds decoded memory. Playback end/stop restores the idle picture and releases animation work. No webpage, camera, microphone, accessibility permission or runtime network service.
 
@@ -59,7 +63,9 @@ python3 scripts/check-public-tree.py
 
 ## Repository / 目录
 
-- `Shared/`: one canonical immediate, nonmodal voice/content picker compiled by all five targets.
+- `Shared/`: one actual native-menu presenter compiled by all five targets for both buttons; no target copies.
+- `Shared/Human/`: one bridge/protocol and reply-configuration implementation used by all three human pets (tiny target-specific stop-test adapters remain).
+- `Shared/Native/`: one drag discriminator and one shuffle implementation used by Cats/Nailong.
 - `Apps/Human/targets/`: pinned Sun/Shaolan/FengGe source, original upstream notices and local adaptations.
 - `Apps/Cats/`, `Apps/Nailong/`: native apps and isolated tests.
 - `scripts/`: local media preparation and public-source hygiene checks.

@@ -1,7 +1,7 @@
 import AppKit
 
 func runGestureTests(app: AppDelegate, check: (Bool, String) -> Void) {
-    let pet = app.pets[0], view = pet.view, picker = ImmediateVoicePicker.shared
+    let pet = app.pets[0], view = pet.view, picker = NativePetMenu.shared
     checkImmediateVoiceGestures(view: view, cancel: { pet.cancelGesture() }, plays: { pet.audio.playCount }, check: check)
     let originalSizes = app.assets.cats.map { $0.sprite.image.size }
     let menu = pet.soundMenu()
@@ -11,9 +11,9 @@ func runGestureTests(app: AppDelegate, check: (Bool, String) -> Void) {
     check(app.assets.cats.map { $0.sprite.image.size } == originalSizes, "thumbnails do not mutate source sprites")
     checkImmediateVoiceList(view: view, menu: menu, check: check)
     for choice in choices {
-        picker.show(menu, beside: view)
-        picker.buttons.first(where: { $0.item === choice })?.performClick(nil)
-        check(pet.audio.cat.metadata.id == app.assets.cats[choice.tag].metadata.id && pet.audio.playing && pet.frameIndex == 0 && !picker.isVisible, "real cat button switches role and starts full audio+animation")
+        performNativeMenuAction(choice, in: menu)
+        check(pet.audio.cat.metadata.id == app.assets.cats[choice.tag].metadata.id && pet.audio.playing && pet.frameIndex == 0,
+              "native cat menu action switches role and starts full audio+animation")
     }
     pet.audio.stop()
     var bag = ShuffleBag(), previous: Int?, complete = true, adjacent = false
@@ -30,46 +30,45 @@ func runGestureTests(app: AppDelegate, check: (Bool, String) -> Void) {
         NSEvent.mouseEvent(with: type, location: NSPoint(x: pet.spriteRect.midX, y: pet.spriteRect.midY), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: pet.panel.windowNumber, context: nil, eventNumber: 1, clickCount: count, pressure: 1)!
     }
+    // Unit coverage of the pet's double handler, explicitly NOT physical menu tracking.
     for index in app.assets.cats.indices {
         pet.chooseCat(index)
         let role = pet.audio.cat.metadata.id, frame = pet.panel.frame
         let volume = pet.audio.volume, muted = pet.audio.muted
         for _ in 0..<2 {
-            pet.cancelGesture(); view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp))
-            check(picker.isVisible && !(picker.panel?.frame.intersects(pet.panel.frame) ?? true), "nonmodal first click palette does not cover pet")
+            pet.cancelGesture()
             let count = pet.audio.playCount, oldPlayer = pet.audio.player, oldTimer = pet.animationTimer
             view.mouseDown(with: event(.leftMouseDown, 2)); view.mouseUp(with: event(.leftMouseUp, 2))
-            check(pet.audio.playCount == count+1 && !picker.isVisible && pet.audio.playing, "double click immediately plays current cat exactly once")
+            check(pet.audio.playCount == count+1 && !picker.isTracking && pet.audio.playing, "direct double handler plays current cat exactly once")
             check(pet.audio.cat.metadata.id == role && pet.frameIndex == 0 && pet.audio.player !== oldPlayer,
-                  "double click keeps selected cat and restarts its original audio+animation")
-            check(oldTimer == nil || oldTimer?.isValid == false, "repeated double click replaces old animation without stacking")
+                  "double handler keeps selected cat and restarts its original audio+animation")
+            check(oldTimer == nil || oldTimer?.isValid == false, "repeated double replaces old animation without stacking")
             check(pet.panel.frame == frame && pet.audio.volume == volume && pet.audio.muted == muted,
-                  "current-cat double click preserves geometry, volume and mute")
+                  "current-cat double preserves geometry, volume and mute")
         }
     }
-    // Explicit random action remains cross-cat, separately from current-cat double-click.
     var seen = Set<String>()
     app.setCount(2); let fresh = app.pets[1]
     var last: String?
     for _ in 0..<2 {
         seen.removeAll()
         for _ in app.assets.cats.indices {
-            picker.show(fresh.soundMenu(), beside: fresh.view)
-            picker.buttons.first(where: { $0.item.action == #selector(PetController.randomVoice) })?.performClick(nil)
+            let list = fresh.soundMenu()
+            if let item = list.items.first(where: { $0.action == #selector(PetController.randomVoice) }) { performNativeMenuAction(item, in: list) }
             let role = fresh.audio.cat.metadata.id
-            check(!picker.isVisible && fresh.audio.playing, "explicit random button switches and plays a cat")
-            check(last != role, "real random action has no adjacent cross-round repeat")
+            check(fresh.audio.playing, "native random action switches and plays a cat")
+            check(last != role, "native random action has no adjacent cross-round repeat")
             last = role; seen.insert(role)
         }
-        check(seen.count == 10, "real random action crosses all ten cats exactly once per round")
+        check(seen.count == 10, "native random action crosses all ten cats exactly once per round")
     }
-    picker.show(fresh.soundMenu(), beside: fresh.view); app.closePet(fresh)
-    check(fresh.closed && !picker.isVisible && picker.monitorCount == 0, "close removes picker monitors and audio/animation")
+    withNativeMenuTracking({ app.closePet(fresh) }, open: { picker.present(fresh.soundMenu(), for: fresh.view) })
+    check(fresh.closed && !picker.isTracking, "close cancels actual native tracking and audio/animation")
     var menus: [NSMenu] = []; pet.menuPresenter = { menus.append($0) }
-    picker.show(menu, beside: view); view.rightMouseDown(with: event(.rightMouseDown))
-    check(menus.count == 1 && !picker.isVisible, "right click closes list and opens settings only")
+    withNativeMenuTracking({ view.rightMouseDown(with: event(.rightMouseDown)) }, open: { picker.present(menu, for: view) })
+    check(menus.count == 1 && !picker.isTracking, "right handler cancels native list and requests settings only")
     pet.menuPresenter = nil
-    picker.show(menu, beside: view); pet.resize(pet.height)
-    check(!picker.isVisible, "resize closes popup")
+    withNativeMenuTracking({ pet.resize(pet.height) }, open: { picker.present(menu, for: view) })
+    check(!picker.isTracking, "resize cancels native tracking")
     pet.audio.stop()
 }

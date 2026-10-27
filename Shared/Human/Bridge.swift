@@ -14,7 +14,9 @@ import Foundation
 // 不要权限、不开端口、不碰网络。对方在不在跑用 NSRunningApplication 查 bundle id，
 // 不靠「发一条看有没有人回」来猜 —— 对方没启动时发通知只会静默丢掉。
 //
-// 三份完全相同的副本（SunPet / 好事桌宠 / 薄肌桌宠），改一处要三处同步。
+// SunPet / 好事桌宠 / 薄肌桌宠共同编译此唯一实现。
+// Adapted from Ganzhe2028's upstream companion protocol; see CREDITS.md and
+// Apps/Human/targets/*/Upstream/ for preserved source notices and MIT licenses.
 
 /// 参与联动的桌宠身份。rawValue 就是各自 Info.plist 里的 CFBundleIdentifier。
 enum PetRole: String, CaseIterable {

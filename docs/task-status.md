@@ -1,10 +1,25 @@
 # Integration status / 整合状态
 
-Status: completed;2.2/build4 installed and verified in all five apps
+Status:2.3/build5 installed; native menu/caption/reuse checks passed; physical double-click acceptance remains unverified
 Updated: 2026-10-27
-Owner: main Pi integration session. Human reply policy e4a2c2ed-604b-42d completed/frozen. Menu appearance69287e19-a622-4bb froze its source before an aborted final response; main reviewed/compiled/tested its actual files. No ongoing writes.
+Owner: main Pi integration session. Native menu d54bf55d-a100-48c and human reuse1f5fa6e7-6629-400 ended/frozen; main integrated, built and installed. No delegated writes remain.
 
-## Latest delivery / 最新交付
+## Latest correction / 最新纠正
+
+User rejected the2.2 imitation and explicitly required actual native NSMenu, no playback provenance captions, and real code reuse. Delivered:
+
+- Deleted the custom popup panel, row drawing, material/highlight imitation and column layout. All five apps now route BOTH left and right through the single `NativePetMenu` implementation in `Shared/ImmediateVoicePicker.swift`, using `NSMenu.popUp`. Menu models keep their original target/action/state. Actual native tracking-mode and WindowServer menu-window tests passed; captured the real native window, not an image of a surrogate view. Actual37-voice screenshot shows the full list on this display; an isolated41-voice helper also fit at1076pt. On a shorter display, native AppKit overflow applies; fake native multicolumn rendering is gone.
+- Removed cats' metadata-label playback subtitle. Real Happy/Oiiai audio-clock playback screenshots have no label below; regression assertions verify successful playback has empty subtitle and genuine errors remain visible.
+- One shared human bridge/protocol plus one shared reply configuration/test implementation in `Shared/Human/`; three duplicate active bridge files removed. Each target retains a7-line stop-test adapter, not a copy of the feature. Original upstream/license snapshots untouched.
+- One shared Cats/Nailong drag discriminator and shuffle implementation in `Shared/Native/`; verified identical bodies before removing active duplicates. Root compiles `Shared/*.swift` for all, `Shared/Human/*.swift` for humans, `Shared/Native/*.swift` for Cats/Nailong.
+
+All five optimized2.3 builds, signatures and isolated self-tests passed. Extra real native-menu snapshots and full Happy/Oiiai window playback passed. Installed exact tested executables in all five existing entries; five normal apps/nine visible pets verified, all captured settings retained. No media edits or publication.
+
+**Explicit remaining input boundary:** actual NSMenu tracking consumes the second outside mouse-down before local monitors see it. The shared presenter narrowly transfers a still-held second press back into the original window only for a cancelled LEFT menu, same hit region, <=system double interval/4pt, no selection. Right/Escape/timeout/distant cases do not get replayed. The process-local native tracking probe proved synchronous `window.sendEvent(secondDown)` followed by posted secondUp reaches the original view even inside the first mouseUp stack. Pure gate/direct-handler double/drag tests passed. Physical `NSEvent.pressedMouseButtons` timing was NOT verified; AX trust is false and no permissions/global injection were requested. Do not claim synthetic tests prove every physical quick-double case. User physical acceptance is pending; see `synchronous-route-probe.log` / `native-agent-handoff.txt`.
+
+Evidence `.local-evidence/menu-native-compare/`: build/native UI logs, true menu PNGs, label-free playing PNGs, before/after preferences, installed hashes/windows/audit, shared-source comparison receipts. After verified installation, this task's build/module cache, old bundle copies, installer helper and agent-owned /tmp probes were cleaned; necessary evidence and original media retained.
+
+## Prior2.2 delivery / 前次2.2交付
 
 - Human right-click settings now include “接谁的话” (each other peer independently selectable) and “接话方式 → 允许有限接龙（最多2轮）”. Missing preferences preserve original source defaults (Sun:both, GoodThing:Sun, Shaolan:none); empty means none. Default replies only to manual-hop0. Optional chaining permits incoming hop0/1, rejects negative/hop>=2;2 is maximum depth, NOT global total replies under branching. Incoming/queued/executing work is filtered; config changes cancel queued replies. Existing master switches remain unchanged. Master controls receiving/responding, while normal manual speech still broadcasts for other opted-in listeners. Shaolan's previously inert receiving path is wired to its real answer clips; GoodThing's obsolete root restriction removed. Protocol unchanged, no new service.
 - Double-click cat now immediately plays/restarts CURRENT cat's audio+animation without switching role. Explicit left random still shuffles across cats. Real double-event tests cover every cat twice, same-role/frame-zero/player replacement, no stacking, preserved volume/mute and menu random separately.
@@ -13,7 +28,7 @@ Owner: main Pi integration session. Human reply policy e4a2c2ed-604b-42d complet
 - Replaced five verified installed2.1 bundles, gracefully restarted, verified exact tested executable hashes/signatures/version2.2, five normal apps and nine visible pets. All captured preexisting settings (including coordinates in this receipt) were retained; no existing disabled master was enabled. Installer wrote no preferences. `installed-audit.log` and before/after preference snapshots record this.
 - Media unchanged. No upload/release. After successful verification, old app copies, build/module cache and one-off install/window scripts were removed; necessary evidence and selected media retained.
 
-## Current follow-up / 当前追加需求
+## Prior2.1 compact-picker follow-up / 前次2.1紧凑列表
 
 User requested all left-click items visible simultaneously, no scrollbar, tighter spacing. Delivered one shared direct-view picker (no NSScrollView/scrollers),13pt text,24pt rows, adaptive balanced columns. Actual37-voice list shown in two columns (~620×498pt), ten cats in one (~312×330pt). Item identity/actions/thumbnails and immediate gestures retained; placement stays in the visible screen outside the pet.
 

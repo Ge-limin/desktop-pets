@@ -94,6 +94,12 @@ func runTests(app: AppDelegate, ui: Bool) {
     first.cancelGesture(); pump(0.08)
     check(first.view.drawCount == idleDraws && first.animationCache.decodeCount == idleDecodes && first.animationTimer == nil, "hold idle does not decode/redraw/start animation")
     let frame = first.panel.frame, volume = first.audio.volume
+    first.audio.play(0)
+    check(first.audio.playing && first.audio.subtitle.isEmpty, "actual playback never displays clip captions")
+    first.audio.fail("subtitle regression error")
+    check(first.audio.subtitle == "subtitle regression error", "subtitle preserves actual failure message")
+    first.audio.stop()
+    check(first.audio.subtitle.isEmpty, "stop clears subtitle error")
     runGestureTests(app: app) { check($0, $1) }
     check(first.panel.frame == frame && first.audio.volume == volume && app.pets.count == 1, "role picker preserves window count/position/size/volume")
     first.audio.play(0); let oldTimer = first.animationTimer, oldPlayer = first.audio.player!

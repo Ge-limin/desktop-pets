@@ -1,6 +1,6 @@
 import AppKit
 
-// A finite, per-pet shuffled pool. Manual selections do not pin or consume it.
+// Shared by Cats and Nailong: finite per-pet shuffle; manual selections do not consume it.
 struct ShuffleBag {
     private var remaining: [Int] = []
     private var previous: Int?

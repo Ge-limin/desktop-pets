@@ -101,7 +101,7 @@ final class PetView: NSView {
         guard event.clickCount <= 2 else { return }
         if doublePress { doublePress = false; clickSequence.cancel(); owner?.playAllRandom(); return }
         guard window != nil, !isHidden, let owner else { return }
-        ImmediateVoicePicker.shared.show(owner.makeClipMenu(), beside: self)
+        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence)
     }
     override func rightMouseDown(with event: NSEvent) {
         clickSequence.cancel()
@@ -115,7 +115,7 @@ final class PetView: NSView {
     override func accessibilityPerformPress() -> Bool {
         clickSequence.cancel()
         guard let owner else { return false }
-        ImmediateVoicePicker.shared.show(owner.makeClipMenu(), beside: self)
+        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence)
         return true
     }
     func animate(_ enabled: Bool) {

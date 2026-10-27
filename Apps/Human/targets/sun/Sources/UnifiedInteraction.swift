@@ -53,7 +53,7 @@ extension AppDelegate {
     func presentPetMenu(_ menu: NSMenu, event: NSEvent) {
         pet.clickSequence.cancel()
         if selfTest { testPresentedMenus.append(menu); return }
-        NSMenu.popUpContextMenu(menu, with: event, for: pet)
+        NativePetMenu.shared.present(menu, for: pet, event: event)
     }
     @objc func playAllRandom() {
         guard let id = allClipsBag.next(clips.map(\.id)), let clip = clips.first(where: { $0.id == id }) else { return }
@@ -122,11 +122,9 @@ extension AppDelegate {
         let fixedPin = pinnedID
         checkImmediateVoiceList(view: pet, menu: list, check: check)
         for entry in entries {
-            ImmediateVoicePicker.shared.show(list, beside: pet)
-            ImmediateVoicePicker.shared.buttons.first(where: { $0.item === entry })?.performClick(nil)
-            check(!ImmediateVoicePicker.shared.isVisible, "real selection closes picker")
+            performNativeMenuAction(entry, in: list)
         }
-        check(testPlaybackIDs.suffix(expectedCount).elementsEqual(ids), "every real picker button selects its exact recording")
+        check(testPlaybackIDs.suffix(expectedCount).elementsEqual(ids), "each native NSMenu target/action selects its exact recording")
         check(randomMode == false && pinnedID == fixedPin, "selection never locks or changes legacy mode/pin")
         testPlaybackIDs.removeAll(); testPresentedMenus.removeAll()
         checkImmediateVoiceGestures(view: pet, cancel: { self.pet.clickSequence.cancel() }, plays: { self.testPlaybackIDs.count }, check: check)
@@ -136,10 +134,12 @@ extension AppDelegate {
         testPlaybackIDs.removeAll(); allClipsBag = AllClipsShuffle()
         for _ in ids { click(2) }
         check(testPlaybackIDs.count == expectedCount && Set(testPlaybackIDs) == Set(ids), "actual double handlers use ALL clips despite exclusions and fixed mode")
-        pet.clickSequence.cancel(); click(); pet.rightMouseDown(with: event(.rightMouseDown))
-        check(testPresentedMenus.count == 1 && !ImmediateVoicePicker.shared.isVisible, "right click closes list; settings only")
-        pet.clickSequence.cancel(); click(); pet.viewWillMove(toWindow: nil)
-        check(!ImmediateVoicePicker.shared.isVisible, "view removal closes real picker")
+        pet.clickSequence.cancel()
+        withNativeMenuTracking({ self.pet.rightMouseDown(with: event(.rightMouseDown)) }, open: { click() })
+        check(testPresentedMenus.count == 1 && !NativePetMenu.shared.isTracking, "right handler cancels native list; settings only")
+        pet.clickSequence.cancel()
+        withNativeMenuTracking({ self.pet.viewWillMove(toWindow: nil) }, open: { click() })
+        check(!NativePetMenu.shared.isTracking, "view removal cancels native tracking")
         check(bridgeEnabled == originalBridge, "manual interaction never changes bridge switch")
         runSettingsSelfTest(check: check)
         randomMode = originalMode; pinnedID = originalPin; excludedIDs = originalExcluded

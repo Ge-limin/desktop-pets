@@ -91,29 +91,28 @@ func runTests(app: AppDelegate, ui: Bool) {
     app.setCount(3); check(Set(app.pets.map(\.id)).count == 3, "unique IDs after remove/add")
     app.setCount(1)
     // Real nonmodal panels in both silent modes; only right-click settings use an observer.
-    let view = first.view, picker = ImmediateVoicePicker.shared
+    let view = first.view, picker = NativePetMenu.shared
     checkImmediateVoiceGestures(view: view, cancel: { first.cancelGesture() }, plays: { first.audio.playCount }) { check($0, $1) }
     let soundMenu = first.soundMenu()
     let choices = soundMenu.items.filter { $0.action == #selector(PetController.say(_:)) }
     check(choices.count == 6 && choices.map(\.title) == soundNames && soundMenu.items[0].title.contains("6"), "all six real clips at top level with total")
     checkImmediateVoiceList(view: view, menu: soundMenu) { check($0, $1) }
     for choice in choices {
-        picker.show(soundMenu, beside: view)
-        picker.buttons.first(where: { $0.item === choice })?.performClick(nil)
-        check(first.audio.lastPlayed == choice.tag && first.audio.player?.numberOfLoops == 0 && !picker.isVisible, "real button plays exact file once and closes picker")
+        performNativeMenuAction(choice, in: soundMenu)
+        check(first.audio.lastPlayed == choice.tag && first.audio.player?.numberOfLoops == 0 && !picker.isTracking, "native menu action plays exact file once")
     }
     var menus: [NSMenu] = []
     first.menuPresenter = { menus.append($0) }
     let event = NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: first.panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
-    picker.show(soundMenu, beside: view); view.rightMouseDown(with: event)
-    check(menus.count == 1 && !picker.isVisible, "right click closes voice panel, settings only")
+    withNativeMenuTracking({ view.rightMouseDown(with: event) }, open: { picker.present(soundMenu, for: view) })
+    check(menus.count == 1 && !picker.isTracking, "right click closes voice panel, settings only")
     first.menuPresenter = nil
-    picker.show(soundMenu, beside: view); first.resize(220)
-    check(!picker.isVisible, "resize closes real picker")
+    withNativeMenuTracking({ first.resize(220) }, open: { picker.present(soundMenu, for: view) })
+    check(!picker.isTracking, "resize closes real picker")
     check(view.hitTest(NSPoint(x: 1, y: 1)) == nil, "transparent padding hitTest passes through")
     app.setCount(2); let doomed = app.pets[1]
-    picker.show(doomed.soundMenu(), beside: doomed.view); app.setCount(1)
-    check(doomed.closed && !picker.isVisible && picker.monitorCount == 0, "window removal closes list and monitors")
+    withNativeMenuTracking({ app.setCount(1) }, open: { picker.present(doomed.soundMenu(), for: doomed.view) })
+    check(doomed.closed && !picker.isTracking, "window removal closes list and monitors")
     // Audio replacement must reject a stale completion callback.
     _ = first.audio.play(0)
     let stale = first.audio.player!; _ = first.audio.play(2)

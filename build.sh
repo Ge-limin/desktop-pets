@@ -24,7 +24,13 @@ for target in "${targets[@]}"; do
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" build/module-cache build/logs
   echo "Building $target"
-  swiftc -O -module-cache-path "$PWD/build/module-cache" -target arm64-apple-macosx14.0 "${frameworks[@]}" "$dir"/Sources/*.swift Shared/ImmediateVoicePicker.swift -o "$app/Contents/MacOS/$executable"
+  shared_sources=(Shared/*.swift)
+  if [[ "$dir" == Apps/Human/* ]]; then
+    shared_sources+=(Shared/Human/*.swift)
+  else
+    shared_sources+=(Shared/Native/*.swift)
+  fi
+  swiftc -O -module-cache-path "$PWD/build/module-cache" -target arm64-apple-macosx14.0 "${frameworks[@]}" "$dir"/Sources/*.swift "${shared_sources[@]}" -o "$app/Contents/MacOS/$executable"
   ditto "$media" "$app/Contents/Resources"
   # License files are plain files, not role directories interpreted by Cats' loader.
   cp Licenses/ShaolanPet-MIT.txt "$app/Contents/Resources/LICENSE-ShaolanPet.txt"
@@ -38,8 +44,8 @@ for target in "${targets[@]}"; do
 <key>CFBundleName</key><string>$name</string>
 <key>CFBundleDisplayName</key><string>$name</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>2.2</string>
-<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleShortVersionString</key><string>2.3</string>
+<key>CFBundleVersion</key><string>5</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
@@ -48,8 +54,8 @@ PLIST
   if [[ -f "$dir/Info.plist" ]]; then
     # Preserve original app identities/icons, update version to identify the local build.
     cp "$dir/Info.plist" "$app/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.2' "$app/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 4' "$app/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.3' "$app/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 5' "$app/Contents/Info.plist"
     for license in "$dir/Upstream/LICENSE" "$dir/Upstream/LICENSE-SunPet" "$dir/Upstream/NOTICE.md"; do
       [[ ! -f "$license" ]] || cp "$license" "$app/Contents/Resources/$(basename "$license")"
     done

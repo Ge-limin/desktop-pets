@@ -149,7 +149,8 @@ final class PetAudio: NSObject, AVAudioPlayerDelegate {
     init(cat: Cat, silentTest: Bool) { self.cat = cat; self.silentTest = silentTest }
     var playing: Bool { player != nil }
     var outputVolume: Float { silentTest || muted ? 0 : min(1, max(0, volume)) }
-    var subtitle: String { lastError ?? current.map { cat.metadata.clips[$0].label } ?? "" }
+    // Clip labels are provenance, not desktop captions. Only real failures are shown.
+    var subtitle: String { lastError ?? "" }
     func applyVolume() { player?.volume = outputVolume }
     @discardableResult func play(_ index: Int) -> Bool { playSequence([index]) }
     @discardableResult func playRandom() -> Bool { play(randomBag.next(count: cat.sounds.count)) }
