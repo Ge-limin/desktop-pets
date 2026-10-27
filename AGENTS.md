@@ -12,7 +12,7 @@ Unified native AppKit desktop-pet source. Preserve upstream credits/licenses; us
 ## Contract
 - Compile each app with its Sources/*.swift plus Shared/ImmediateVoicePicker.swift; shared input is frozen during parallel target work. Signal a required shared change before editing.
 - Private runtime assets: .local-media/<target>. Build output: build/<app>.app. Keep existing bundle IDs for settings.
-- Left: immediate nonmodal content list with random/stop. Human/Nailong: voices. Cats: all installed cats; choosing a cat replaces the current role and plays immediately.
+- Left: immediate nonmodal content list with random/stop. All items visible at once, no scroll container/scrollers; dense24pt rows and adaptive columns for long lists, contained on screen without covering the pet. Human/Nailong: voices. Cats: all installed cats; choosing a cat replaces the current role and plays immediately.
 - Double: choose once at random from that same left-click content catalog, using shuffle bag; drag only moves. Right: configuration only (no duplicate voice/random/role-picking entries).
 - Single pet owns one playback at a time, new playback replaces old; stop clears pending/autoreply. Mute preserves configured volume. Preserve previous settings; add missing persistence without reset. Normal mode single instance, tests isolated and silent.
 - Cat animation contract: each clip may require animation {directory:'Animation', fps:24, frameCount:N, width:W, height:H, duration:S}; frames zero-based 00000.png etc. PNG RGBA frames share fixed canvas/crop. Clock from actual AVAudioPlayer.currentTime; stop/end/change restores idle face; muted playback still animates. Bounded cache, no whole-library frame decode at startup.

@@ -1,7 +1,7 @@
 import AppKit
 
-// Canonical: united-pets-local/shared/ImmediateVoicePicker.swift. Copy unchanged
-// to each independent target. AppKit controls only; no modal tracking or timer.
+// Single canonical picker compiled directly into all five targets.
+// AppKit controls only; no modal tracking, scrolling, or delayed interaction.
 private final class VoicePickerPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -18,7 +18,7 @@ final class VoicePickerButton: NSButton {
         image = item.image; imagePosition = item.image == nil ? .noImage : .imageLeft
         imageScaling = .scaleProportionallyDown
         action = #selector(ImmediateVoicePicker.choose(_:))
-        bezelStyle = .rounded; alignment = .left
+        bezelStyle = .rounded; controlSize = .small; alignment = .left
         font = .systemFont(ofSize: 13); lineBreakMode = .byTruncatingTail
         toolTip = item.title; tag = item.tag
         isEnabled = item.isEnabled && (item.action != nil || item.submenu != nil)
@@ -31,7 +31,6 @@ final class ImmediateVoicePicker: NSObject {
     static let shared = ImmediateVoicePicker()
     private(set) var panel: NSPanel?
     private(set) var menu: NSMenu?
-    private(set) var scrollView: NSScrollView?
     private(set) var buttons: [VoicePickerButton] = []
     private(set) weak var owner: NSView?
     private var localMonitor: Any?
@@ -41,38 +40,73 @@ final class ImmediateVoicePicker: NSObject {
     var monitorCount: Int { (localMonitor == nil ? 0 : 1) + (globalMonitor == nil ? 0 : 1) }
     var observerCount: Int { observations.count }
 
-    // Pick a free strip, never overlap the pet window. Shrink/scroll rather than
-    // escape visibleFrame. All coordinates are global, including negative screens.
-    static func placement(anchor: NSRect, screen: NSRect, contentHeight: CGFloat) -> NSRect? {
+    static let rowHeight: CGFloat = 24
+    private static let padding: CGFloat = 6
+    private static let columnGap: CGFloat = 8
+    struct Layout {
+        let frame: NSRect
+        let itemFrames: [NSRect] // Menu order, column-major in a flipped content view.
+        let columns: Int
+    }
+
+    // Fit the entire list in one free strip, never over the pet's second-click
+    // target. Prefer one column for short lists, balanced two columns for long
+    // lists; use more only when a short/wide free strip requires it. No clipping.
+    static func layout(anchor: NSRect, screen: NSRect, rowHeights: [CGFloat]) -> Layout? {
         let s = screen.insetBy(dx: 8, dy: 8), gap: CGFloat = 8
+        guard s.width > 0, s.height > 0, !rowHeights.isEmpty,
+              rowHeights.allSatisfy({ $0 > 0 && $0 <= rowHeight }) else { return nil }
         let a = anchor.intersection(s)
-        guard !a.isNull else {
-            return NSRect(x: s.minX, y: s.minY, width: min(320, s.width), height: min(contentHeight, s.height, 420))
-        }
-        let strips = [
+        let strips = a.isNull ? [s] : [
             NSRect(x: a.maxX + gap, y: s.minY, width: max(0, s.maxX-a.maxX-gap), height: s.height),
             NSRect(x: s.minX, y: s.minY, width: max(0, a.minX-s.minX-gap), height: s.height),
             NSRect(x: s.minX, y: a.maxY + gap, width: s.width, height: max(0, s.maxY-a.maxY-gap)),
             NSRect(x: s.minX, y: s.minY, width: s.width, height: max(0, a.minY-s.minY-gap))
         ]
-        let desiredH = min(contentHeight, 420)
-        let usable = strips.filter { $0.width >= 160 && $0.height >= 48 }
-        guard let strip = usable.first(where: { $0.width >= 320 && $0.height >= desiredH }) ?? usable.max(by: {
-            min($0.width, 320)*min($0.height, desiredH) < min($1.width, 320)*min($1.height, desiredH)
-        }) else { return nil }
-        let w = min(320, strip.width), h = min(desiredH, strip.height)
-        return NSRect(x: min(max(anchor.midX-w/2, strip.minX), strip.maxX-w),
-                      y: min(max(anchor.midY-h/2, strip.minY), strip.maxY-h), width: w, height: h)
+        for columns in 1...rowHeights.count {
+            // Consecutive, evenly sized groups preserve the original menu order.
+            let base = rowHeights.count / columns, extra = rowHeights.count % columns
+            var ranges: [Range<Int>] = [], next = 0
+            for column in 0..<columns {
+                let end = next + base + (column < extra ? 1 : 0)
+                ranges.append(next..<end); next = end
+            }
+            let height = (ranges.map { rowHeights[$0].reduce(0, +) }.max() ?? 0) + 2*padding
+            guard height <= 520 else { continue }
+            let gutters = 2*padding + CGFloat(columns-1)*columnGap
+            let preferredWidth = CGFloat(columns)*300 + gutters
+            let minimumWidth = CGFloat(columns)*200 + gutters
+            let usable = strips.filter { $0.width >= minimumWidth && $0.height >= height }
+            guard let strip = usable.first(where: { $0.width >= preferredWidth }) ?? usable.max(by: { $0.width < $1.width }) else { continue }
+            let width = min(preferredWidth, strip.width)
+            let columnWidth = (width-gutters)/CGFloat(columns)
+            let frame = NSRect(x: min(max(anchor.midX-width/2, strip.minX), strip.maxX-width),
+                               y: min(max(anchor.midY-height/2, strip.minY), strip.maxY-height), width: width, height: height)
+            var itemFrames: [NSRect] = []
+            for (column, range) in ranges.enumerated() {
+                var y = padding
+                for index in range {
+                    itemFrames.append(NSRect(x: padding+CGFloat(column)*(columnWidth+columnGap), y: y,
+                                             width: columnWidth, height: rowHeights[index]))
+                    y += rowHeights[index]
+                }
+            }
+            return Layout(frame: frame, itemFrames: itemFrames, columns: columns)
+        }
+        // Extreme screen/pet configurations cannot fit readable, nonoverlapping
+        // controls. Fail explicitly rather than hide items or intercept the pet.
+        return nil
     }
 
     func show(_ menu: NSMenu, beside view: NSView) {
         dismiss()
         guard let host = view.window, let screen = host.screen ?? NSScreen.main else { return }
-        let contentHeight = CGFloat(menu.items.reduce(16) { $0 + ($1.isSeparatorItem ? 10 : 32) })
-        guard let frame = Self.placement(anchor: host.frame, screen: screen.visibleFrame, contentHeight: contentHeight) else {
-            NSLog("Voice picker: no space beside pet on current screen")
+        guard let layout = Self.layout(anchor: host.frame, screen: screen.visibleFrame,
+                                       rowHeights: menu.items.map { $0.isSeparatorItem ? 6 : Self.rowHeight }) else {
+            NSLog("Voice picker: entire list cannot fit outside pet on current screen")
             return
         }
+        let frame = layout.frame
         owner = view; self.menu = menu
         let panel = VoicePickerPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isReleasedWhenClosed = false; panel.hidesOnDeactivate = false
@@ -80,23 +114,18 @@ final class ImmediateVoicePicker: NSObject {
         panel.backgroundColor = .windowBackgroundColor
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.title = "声音 / Voices"
-        let scroll = NSScrollView(frame: NSRect(origin: .zero, size: frame.size))
-        scroll.hasVerticalScroller = true; scroll.autohidesScrollers = false
-        scroll.borderType = .noBorder
-        let document = VoicePickerDocument(frame: NSRect(x: 0, y: 0, width: frame.width-18, height: contentHeight))
-        var y: CGFloat = 8
-        for item in menu.items {
+        let document = VoicePickerDocument(frame: NSRect(origin: .zero, size: frame.size))
+        for (item, rect) in zip(menu.items, layout.itemFrames) {
             if item.isSeparatorItem {
-                let line = NSBox(frame: NSRect(x: 8, y: y+4, width: document.frame.width-16, height: 1))
-                line.boxType = .separator; document.addSubview(line); y += 10
+                let line = NSBox(frame: NSRect(x: rect.minX+2, y: rect.midY, width: rect.width-4, height: 1))
+                line.boxType = .separator; document.addSubview(line)
             } else {
                 let button = VoicePickerButton(item: item)
-                button.frame = NSRect(x: 6, y: y, width: document.frame.width-12, height: 30)
-                document.addSubview(button); buttons.append(button); y += 32
+                button.frame = rect
+                document.addSubview(button); buttons.append(button)
             }
         }
-        scroll.documentView = document; panel.contentView = scroll
-        self.panel = panel; scrollView = scroll
+        panel.contentView = document; self.panel = panel
         // Mouse-only monitoring requires neither AX nor global keyboard permission.
         let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
@@ -138,7 +167,7 @@ final class ImmediateVoicePicker: NSObject {
         for (center, token) in observations { center.removeObserver(token) }
         observations.removeAll()
         panel?.orderOut(nil); panel?.close(); panel = nil
-        scrollView = nil; buttons.removeAll(); menu = nil; owner = nil
+        buttons.removeAll(); menu = nil; owner = nil
     }
 }
 
@@ -233,22 +262,80 @@ func checkImmediateVoiceGestures(view: NSView, cancel: () -> Void, plays: () -> 
     host.setFrameOrigin(original); cancel()
 }
 
-func checkImmediateVoiceList(view: NSView, menu: NSMenu, check: (Bool, String) -> Void) {
-    let picker = ImmediateVoicePicker.shared
-    picker.show(menu, beside: view)
-    check(picker.isVisible && picker.buttons.map(\.item) == menu.items.filter { !$0.isSeparatorItem }, "real list preserves every NSMenuItem identity/title/action/tag")
-    if menu.items.count >= 37, let scroll = picker.scrollView, let document = scroll.documentView {
-        check(scroll.hasVerticalScroller && document.frame.height > scroll.contentSize.height, "37+ real rows use scrolling, not offscreen window")
-        scroll.contentView.scroll(to: NSPoint(x: 0, y: max(0, document.frame.height-scroll.contentSize.height)))
-        scroll.reflectScrolledClipView(scroll.contentView)
-        check(scroll.contentView.bounds.minY > 0, "real scroll view reaches lower rows")
-        scroll.contentView.scroll(to: .zero)
+// Pure geometry cases do not depend on the current monitor or saved pet position.
+private func checkImmediateVoiceLayout(check: (Bool, String) -> Void) {
+    for screen in [NSRect(x: 0, y: 0, width: 1280, height: 720),
+                   NSRect(x: -1440, y: -900, width: 1280, height: 720)] {
+        let anchors = [
+            NSRect(x: screen.midX-110, y: screen.midY-110, width: 220, height: 220),
+            NSRect(x: screen.minX, y: screen.minY, width: 220, height: 220),
+            NSRect(x: screen.maxX-220, y: screen.maxY-220, width: 220, height: 220),
+            NSRect(x: screen.minX-60, y: screen.maxY-150, width: 220, height: 220),
+            NSRect(x: screen.minX+150, y: screen.minY+300, width: 980, height: 400),
+            NSRect(x: screen.minX+150, y: screen.minY+20, width: 980, height: 400),
+            NSRect(x: screen.maxX+40, y: screen.minY, width: 220, height: 220)
+        ]
+        for count in [1, 10, 14, 32, 41] {
+            let heights: [CGFloat] = (0..<count).map { $0 == 3 ? 6 : ImmediateVoicePicker.rowHeight }
+            for (index, anchor) in anchors.enumerated() {
+                guard let layout = ImmediateVoicePicker.layout(anchor: anchor, screen: screen, rowHeights: heights) else {
+                    check(false, "synthetic layout fits \(count) items, anchor \(index), screen \(screen.origin)"); continue
+                }
+                let bounds = NSRect(origin: .zero, size: layout.frame.size)
+                let rows = layout.itemFrames
+                check(screen.contains(layout.frame) && !anchor.intersects(layout.frame), "synthetic layout inside screen, outside pet")
+                check(rows.count == count && rows.allSatisfy { bounds.contains($0) && $0.width >= 200 }, "all synthetic rows fully visible at readable widths")
+                check(layout.frame.height <= 520, "compact panel never becomes a tall tower")
+                for i in rows.indices {
+                    check(rows[i].height == heights[i], "dense rows retain full height")
+                    for j in rows.indices where j > i {
+                        check(!rows[i].intersects(rows[j]), "synthetic row hit regions never overlap")
+                    }
+                    if i > 0 {
+                        check(rows[i].minX > rows[i-1].minX || (rows[i].minX == rows[i-1].minX && rows[i].minY >= rows[i-1].maxY), "menu order remains column-major")
+                    }
+                }
+                if index == 0 {
+                    check(layout.columns == (count <= 14 ? 1 : 2), "short lists stay single-column; long lists use balanced two columns")
+                    let populations = Dictionary(grouping: rows, by: { $0.minX }).values.map { $0.count }
+                    check((populations.max() ?? 0)-(populations.min() ?? 0) <= 1, "columns balanced to within one item")
+                }
+                if count == 41 && index == 4 { check(layout.frame.maxY < anchor.minY, "wide pet uses strip below") }
+                if count == 41 && index == 5 { check(layout.frame.minY > anchor.maxY, "wide pet uses strip above") }
+            }
+        }
+        check(ImmediateVoicePicker.layout(anchor: screen, screen: screen, rowHeights: Array(repeating: 24, count: 41)) == nil,
+              "impossible geometry explicitly fails, never clips or covers pet")
     }
+}
+
+func checkImmediateVoiceList(view: NSView, menu: NSMenu, check: (Bool, String) -> Void) {
+    checkImmediateVoiceLayout(check: check)
+    let picker = ImmediateVoicePicker.shared
+    func checkVisibleRows() {
+        check(picker.isVisible && picker.buttons.map(\.item) == menu.items.filter { !$0.isSeparatorItem }, "real list preserves every NSMenuItem identity and order")
+        guard let content = picker.panel?.contentView else { check(false, "real list has content view"); return }
+        func hasScrolling(_ view: NSView) -> Bool {
+            view is NSScrollView || view is NSScroller || view is NSClipView || view.subviews.contains(where: hasScrolling)
+        }
+        check(!hasScrolling(content), "no scroll view, scrollers, or clipping wrapper")
+        check(content.subviews.allSatisfy { content.bounds.contains($0.frame) }, "every control and separator fits visible content bounds")
+        for (index, button) in picker.buttons.enumerated() {
+            check(button.superview === content && content.bounds.contains(button.frame), "each button directly visible without scrolling")
+            check(button.frame.height == 24 && (button.font?.pointSize ?? 0) >= 12 && (button.font?.pointSize ?? 0) <= 13, "dense 24pt rows with 12–13pt text")
+            check(button.title == button.item.title && button.tag == button.item.tag && button.image === button.item.image, "titles, tags and cat thumbnails unchanged")
+            for other in picker.buttons.dropFirst(index+1) {
+                check(!button.frame.intersects(other.frame), "real button hit regions never overlap")
+            }
+        }
+    }
+    picker.show(menu, beside: view); checkVisibleRows()
     if let screen = view.window?.screen, let host = view.window {
         let original = host.frame.origin, f = screen.visibleFrame
         for p in [NSPoint(x: f.minX, y: f.minY), NSPoint(x: f.maxX-host.frame.width, y: f.maxY-host.frame.height)] {
             host.setFrameOrigin(p); picker.show(menu, beside: view)
             check(picker.panel.map { f.contains($0.frame) && !$0.frame.intersects(host.frame) } ?? false, "edge picker switches side/clamps without covering pet")
+            checkVisibleRows()
         }
         host.setFrameOrigin(original); picker.show(menu, beside: view)
     }

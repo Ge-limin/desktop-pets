@@ -1,8 +1,18 @@
 # Integration status / 整合状态
 
-Status: completed, locally installed and verified
+Status: completed; compact-picker2.1/build3 installed in all five applications
 Updated: 2026-10-27
-Owner: main Pi integration session; no delegated work remains running.
+Owner: main Pi integration session. Shared picker subtask af802355-f7b9-4f2 completed; no delegated writes remain.
+
+## Current follow-up / 当前追加需求
+
+User requested all left-click items visible simultaneously, no scrollbar, tighter spacing. Delivered one shared direct-view picker (no NSScrollView/scrollers),13pt text,24pt rows, adaptive balanced columns. Actual37-voice list shown in two columns (~620×498pt), ten cats in one (~312×330pt). Item identity/actions/thumbnails and immediate gestures retained; placement stays in the visible screen outside the pet.
+
+All five2.1 builds/signatures/self-tests passed. Shared tests cover complete item visibility, nonoverlap, no scroll container, density, negative-coordinate/1280×720 screen placement and original gesture/lifecycle behavior. Main reviewed actual37-voice and10-cat picker screenshots (alpha-composited on light background for review). Evidence: `.local-evidence/compact-menu/`.
+
+Installed all five tested binaries with graceful restart; nine visible pet identities retained (user had added two Nailong windows), non-coordinate preferences/counts/roles/volume/mute/size/scope/reply/motion flags unchanged. A strict pixel-identical geometry check did NOT pass: two previously new Nailong panels restored480→485pt transparent padding under existing2.0 create-versus-restore code; saved sizes/origins unchanged. Live coordinate changes also continued during verification; they were recorded, not overwritten. This follow-up does not claim pixel-identical positions or change unrelated native geometry code. Signed installed hashes/version verified independently in `installed-audit.log`.
+
+All prior installed2.0 hashes matched before replacement. No media edits or publication. Successful-task build cache, old app copies and one-off local installer/snapshot helpers are cleaned after verification; compact-menu logs/screenshots/preferences retained locally.
 
 ## Delivered / 已交付
 

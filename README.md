@@ -12,6 +12,8 @@ One native interaction model for five local macOS pet apps. 一个仓库、一�
 | Drag / 拖动 | Move only, without triggering playback / 只移动，不触发播放 |
 | Right click / 右键 | Configuration only: volume, mute, size, Spaces, per-pet options, recover and close / 只配置：音量、静音、大小、显示范围、角色选项、恢复与关闭 |
 
+The compact picker shows all items at once without scrolling (24pt rows, adaptive columns for long lists). 紧凑列表无滚动条，24pt行高；长列表自动分列，所有选项同时可见。
+
 The panel may briefly appear on the first click of a double-click; single-click is never delayed to conceal that. Same-pet playback is exclusive. Stop clears queued replies/playback. Mute keeps the saved volume; muted cats still animate. Positions and settings persist in normal use. Tests are silent and preference-isolated.
 
 双击的第一下允许列表短暂出现，不用半秒等待掩盖；同一只不叠音，停止会取消等待播放。静音不丢音量，猫静音仍有动作。正常模式保存设置，测试不污染用户偏好。
