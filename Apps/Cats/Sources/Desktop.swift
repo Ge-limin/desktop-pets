@@ -33,6 +33,10 @@ final class PetView: NSView {
     override func mouseDown(with event: NSEvent) { owner?.press(event) }
     override func mouseDragged(with event: NSEvent) { owner?.drag(event) }
     override func mouseUp(with event: NSEvent) { owner?.release(event) }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        owner?.cancelGesture()
+        super.viewWillMove(toWindow: newWindow)
+    }
     override func rightMouseDown(with event: NSEvent) {
         guard let owner else { return }; owner.cancelGesture()
         owner.presentMenu(owner.contextMenu(), event: event)
@@ -45,7 +49,6 @@ final class PetController: NSObject {
     let view: PetView
     let model = Interaction()
     let audio: PetAudio
-    let clickSequence = ImmediateClickSequence()
     private var doublePress = false
     private var suppressClick = false
     var menuPresenter: ((NSMenu) -> Void)?
@@ -91,8 +94,7 @@ final class PetController: NSObject {
         for (center, name, object) in [
             (NotificationCenter.default, NSApplication.didResignActiveNotification, nil),
             (NotificationCenter.default, NSWindow.didResignKeyNotification, panel),
-            (NotificationCenter.default, NSWindow.willCloseNotification, panel),
-            (NSWorkspace.shared.notificationCenter, NSWorkspace.didActivateApplicationNotification, nil)
+            (NotificationCenter.default, NSWindow.willCloseNotification, panel)
         ] as [(NotificationCenter, Notification.Name, AnyObject?)] {
             let token = center.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in self?.cancelGesture() }
             observers.append((center, token))
@@ -146,12 +148,12 @@ final class PetController: NSObject {
         guard !closed else { return }
         if checkRelease && model.down && NSEvent.pressedMouseButtons & 1 == 0 { cancelGesture() }
         let local = view.convert(panel.convertPoint(fromScreen: mouse ?? NSEvent.mouseLocation), from: nil)
-        setIgnoresMouse(!model.down && !NativePetMenu.shared.isHandlingPress(for: view) && !isOpaque(local))
+        setIgnoresMouse(!model.down && !isOpaque(local))
     }
     func eventPoint(_ event: NSEvent) -> NSPoint { panel.convertPoint(toScreen: event.locationInWindow) }
     func press(_ event: NSEvent) {
-        guard !closed, !model.down, clickSequence.acceptsDown(event, in: view) else { return }
-        doublePress = clickSequence.begin(event, in: view)
+        guard !closed, !model.down else { return }
+        doublePress = NativePetMenu.shared.beginLeft(event)
         suppressClick = event.clickCount > 2
         model.press(eventPoint(event)); panelOrigin = panel.frame.origin; setIgnoresMouse(false)
     }
@@ -159,7 +161,7 @@ final class PetController: NSObject {
         guard model.down else { return }
         let point = eventPoint(event); model.drag(point)
         if model.dragging {
-            clickSequence.cancel()
+            NativePetMenu.shared.dismiss()
             panel.setFrameOrigin(NSPoint(x: panelOrigin.x+point.x-model.origin.x, y: panelOrigin.y+point.y-model.origin.y))
         }
     }
@@ -171,22 +173,19 @@ final class PetController: NSObject {
         doublePress = false; suppressClick = false; returnToScreen()
         if click {
             if playCurrent { playCurrentCat(); NativePetMenu.traceDoublePlayback(audio.player?.isPlaying == true) }
-            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence,
-                onDouble: { [weak self] in
-                    guard let self, !self.closed else { return false }; self.playCurrentCat(); return self.audio.player?.isPlaying == true
-                }, onDragEnd: { [weak self] in
-                    guard let self, !self.closed else { return }
-                    self.returnToScreen(); self.app?.savePreferences()
-                }) }
+            else { NativePetMenu.shared.scheduleLeft(for: view, after: event) { [weak self] in
+                guard let self, !self.closed else { return nil }
+                return self.soundMenu()
+            } }
         }
         app?.savePreferences()
     }
     func presentMenu(_ menu: NSMenu, event: NSEvent? = nil) {
-        clickSequence.cancel()
+        NativePetMenu.shared.dismiss()
         if let event {
             if let menuPresenter { menuPresenter(menu); return }
             NativePetMenu.shared.present(menu, for: view, event: event)
-        } else { NativePetMenu.shared.present(menu, for: view, sequence: clickSequence) }
+        } else { NativePetMenu.shared.present(menu, for: view) }
     }
     func soundMenu() -> NSMenu {
         let menu = NSMenu()
@@ -205,7 +204,7 @@ final class PetController: NSObject {
         return menu
     }
     func cancelGesture() {
-        clickSequence.cancel(); doublePress = false; suppressClick = false
+        NativePetMenu.shared.dismiss(); doublePress = false; suppressClick = false
         let wasDown = model.down; model.cancel()
         if wasDown && !closed { returnToScreen(); app?.savePreferences() }
     }
@@ -395,6 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator()); addGlobalItems(to: menu); return menu
     }
+    func menuWillOpen(_ menu: NSMenu) { pets.forEach { $0.cancelGesture() } }
     func menuNeedsUpdate(_ menu: NSMenu) {
         pets.forEach { $0.cancelGesture() }
         let fresh = statusMenu(); menu.removeAllItems()

@@ -51,7 +51,7 @@ extension AppDelegate {
         return menu
     }
     func presentPetMenu(_ menu: NSMenu, event: NSEvent) {
-        pet.clickSequence.cancel()
+        NativePetMenu.shared.dismiss()
         if selfTest { testPresentedMenus.append(menu); return }
         NativePetMenu.shared.present(menu, for: pet, event: event)
     }
@@ -59,8 +59,8 @@ extension AppDelegate {
         guard let id = allClipsBag.next(clips.map(\.id)), let clip = clips.first(where: { $0.id == id }) else { return }
         play(clip)
     }
-    func applicationDidResignActive(_ notification: Notification) { pet?.clickSequence.cancel() }
-    func applicationWillHide(_ notification: Notification) { pet?.clickSequence.cancel() }
+    func applicationDidResignActive(_ notification: Notification) { NativePetMenu.shared.dismiss() }
+    func applicationWillHide(_ notification: Notification) { NativePetMenu.shared.dismiss() }
 
     /// Direct NSView events; no AX, blocking menus, hardware probes, bridge traffic or real defaults.
     func runUnifiedSelfTest(expectedCount: Int) {
@@ -112,30 +112,34 @@ extension AppDelegate {
         let originalMode = randomMode, originalPin = pinnedID, originalExcluded = excludedIDs, originalBridge = bridgeEnabled
         randomMode = false; pinnedID = ids.first; excludedIDs = Set(ids)
         let fixedPin = pinnedID
-        checkImmediateVoiceList(view: pet, menu: list, check: check)
+        checkNativeVoiceList(view: pet, menu: list, check: check)
         for entry in entries {
             performNativeMenuAction(entry, in: list)
         }
         check(testPlaybackIDs.suffix(expectedCount).elementsEqual(ids), "each native NSMenu target/action selects its exact recording")
         check(randomMode == false && pinnedID == fixedPin, "selection never locks or changes legacy mode/pin")
         testPlaybackIDs.removeAll(); testPresentedMenus.removeAll()
-        checkImmediateVoiceGestures(view: pet, cancel: { self.pet.clickSequence.cancel() }, plays: { self.testPlaybackIDs.count }, check: check)
+        checkDeferredVoiceGestures(view: pet, cancel: { NativePetMenu.shared.dismiss() }, plays: { self.testPlaybackIDs.count }, check: check)
         let previousPlayer = player
-        click(2)
+        click(1); click(2)
         check(previousPlayer?.isPlaying == false && player?.isPlaying == true && player?.volume == 0, "new random replaces previous silent player")
         testPlaybackIDs.removeAll(); allClipsBag = AllClipsShuffle()
-        for _ in ids { click(2) }
+        for _ in ids { click(1); click(2) }
         check(testPlaybackIDs.count == expectedCount && Set(testPlaybackIDs) == Set(ids), "actual double handlers use ALL clips despite exclusions and fixed mode")
-        pet.clickSequence.cancel()
-        withNativeMenuTracking({ self.pet.rightMouseDown(with: event(.rightMouseDown)) }, open: { click() })
+        NativePetMenu.shared.dismiss()
+        testPresentedMenus.removeAll()
+        withNativeMenuTracking({ self.pet.rightMouseDown(with: event(.rightMouseDown)) }, open: { NativePetMenu.shared.present(list, for: pet) })
         check(testPresentedMenus.count == 1 && !NativePetMenu.shared.isTracking, "right handler cancels native list; settings only")
-        pet.clickSequence.cancel()
-        withNativeMenuTracking({ self.pet.viewWillMove(toWindow: nil) }, open: { click() })
+        NativePetMenu.shared.dismiss()
+        withNativeMenuTracking({ self.pet.viewWillMove(toWindow: nil) }, open: { NativePetMenu.shared.present(list, for: pet) })
         check(!NativePetMenu.shared.isTracking, "view removal cancels native tracking")
+        checkPendingMenuCancellation(view: pet, action: { self.setVisualHeight((self.size - 24) * self.imageRatio) }, check: check)
+        checkPendingMenuCancellation(view: pet, action: { self.pet.viewWillMove(toWindow: nil) }, check: check)
+        checkPendingMenuCancellation(view: pet, action: { self.applicationWillResignActive(Notification(name: NSApplication.willResignActiveNotification)) }, check: check)
         check(bridgeEnabled == originalBridge, "manual interaction never changes bridge switch")
         runSettingsSelfTest(check: check)
         randomMode = originalMode; pinnedID = originalPin; excludedIDs = originalExcluded
-        pet.clickSequence.cancel(); player?.stop(); pet.animate(false); captionWork?.cancel()
+        NativePetMenu.shared.dismiss(); player?.stop(); pet.animate(false); captionWork?.cancel()
         print(failures.isEmpty ? "PASS unified interaction (\(expectedCount) clips)" : "FAIL: \(failures)")
         fflush(stdout)
         exit(failures.isEmpty ? 0 : 1)
@@ -182,6 +186,7 @@ extension AppDelegate {
         allSpaces = sender.tag == 1; defaults.set(allSpaces, forKey: "allSpaces"); applyDisplayScope()
     }
     func setVisualHeight(_ height: CGFloat) {
+        NativePetMenu.shared.dismiss()
         size = height / imageRatio + 16
         panel.setContentSize(panelSize); defaults.set(Double(size), forKey: "size"); savePosition()
     }

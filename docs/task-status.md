@@ -1,22 +1,30 @@
 # Integration status / 整合状态
 
-Status:2.3 physical double-click FAILED per user;2.4/build6 candidate installed, awaiting real-input receipt
+Status: completed; fixed0.3s2.6/build8 installed and verified in all five apps
 Updated: 2026-10-27
-Owner: main Pi integration session. ec485dd5-65cd-417 completed/frozen; main integrated fixture isolation and phase reasons, built and installed. Physical watcher process proc_0dd4 is main-owned, bounded to300s.
+Owner: main Pi integration session. eebfcbb8-c9bf-4c6 completed/frozen; main integrated visibility/WindowServer-readiness test fixtures and latest user-selected0.3s deadline.
 
-## Active blocking regression / 当前阻塞回归
+## Current request / 当前需求
+
+User chose conventional delayed-single, then explicitly fixed the interval to0.3s instead of the system's current0.5s. This REPLACES the earlier immediate-single requirement. Single waits0.3s, a timely second down cancels the pending menu and second release plays once; drag/right/status-menu/owner/lifecycle changes cancel. Shared constant `NativePetMenu.clickInterval=0.3` drives all five menus. Pending click stores the real release timestamp/window ID so a late system clickCount2 cannot bypass the app's0.3s cap, even if timer delivery is delayed. System mouse preferences are untouched. Cats still play current role; human/Nailong shuffle their own voices.
+
+Deleted NativeTrackedPress, CG button sampling, local event interception, ignored-down suppression and semantic native handoff. All five share the simple pending native NSMenu timer; no new permission/dependency.2.5/build7 was built/installed without diagnostic flags; during its audit a newer Happy role/positions appeared and were retained, not overwritten (`click-timing/installed-live-change-audit.log`). Its old2.4 copies were cleaned. Latest target2.6/build8.
+
+Actual tests: the deferred-menu fixture now makes its test window visible and waits boundedly for WindowServer publication before dismissing (production hidden-window guard and native-window assertion retained).2.5 all-target verification passed. Fixed0.3 tests check early/boundary/late/reversed time, delayed OS clickCount2 rejection, real menu only after interval, fast/near-deadline double without flash, duplicate-up/drag and lifecycle cancellation. Old human/Cats tests sending only a count2 event were corrected to send both clicks, retaining all voice/replay assertions. All human/Nailong builds passed `click-300ms/verified-build.log`; final Cats passed `cats-final-build.log` after its fixture correction. Media and app defaults untouched by installer. All five2.6 installed executables match tested hashes and strict signatures; normal untraced processes running and captured settings retained (`click-300ms/installed-audit.log`). System mouse preference unchanged. Removed superseded2.5 copies, build/module cache and one-off installer after verification; no task watcher remains. Evidence `.local-evidence/click-timing/` and `.local-evidence/click-300ms/`.
+
+## Resolved2.4 regression / 已解决的2.4回归
 
 User confirmed double-click no longer triggers. The2.3 post-popup still-held-button fallback is invalid for actual use; earlier synthetic route proof did not establish the physical gate. Replace it with bounded observation during native menu tracking, retaining realNSMenu/immediate single click/current-cat double and drag-only motion. Sampling/capture must stop on cancellation/selection/timeout/closure, never run globally at idle or require new permissions. No more claims of a physical fix from direct NSEvent delivery alone.
 
 Candidate owner froze the shared in-tracking sampler/semantic handoff plus five app adapters. Main accepted and copied the22-PASS injected native-loop probe; this is NOT physical proof. Sampler uses permission-freeCG button state only during a left menu's double window or bounded captured press; native `cancelTrackingWithoutAnimation` avoids holding the nested loop through close animation. No fake down/up replay. App callbacks emit `NATIVE_DOUBLE_COMPLETED` only after checking actual player.isPlaying.
 
-Optional `--gesture-trace` logs at most128 phase-only stderr lines per app (no voice content/other-app events). All five ordinary2.4 apps launched via `open --stderr PATH ... --args --gesture-trace` into separate `physical-<bundle>.log` files; apps are not bound to a tool process. Watcher proc_0dd4 reads only these files and notifies on `PHYSICAL_DOUBLE_PLAYBACK_CONFIRMED` after an actual playing-state marker; expires after300s without pretending acceptance. Do not interrupt active playback to remove tracing. Latest installed manifest now2.4; nine visible pets and all recorded settings verified unchanged. Evidence `.local-evidence/double-click/`.
+Optional `--gesture-trace` logs at most128 phase-only stderr lines per app (no voice content/other-app events). All five ordinary2.4 apps launched via `open --stderr PATH ... --args --gesture-trace` into separate `physical-<bundle>.log` files; apps are not bound to a tool process. Watcher proc_0dd4 observed an actual Cats `LEFT_MENU_OPEN → SECOND_DOWN_CAPTURED → SECOND_UP_OBSERVED → NATIVE_DOUBLE_COMPLETED` and exited successfully after203s. Real callback verified player.isPlaying, not synthetic input. Receipt: `.local-evidence/double-click/physical-acceptance.log`; this verifies that actual cat action, not every other app/edge case. Installed manifest2.4; nine visible pets and recorded settings retained. User then requested the simpler delayed-single interaction above.
 
 Initial full tests exposed fixture coupling: fast-up scenario starts Cat animation/Nailong expression, making the next scenario's cached alpha-hit point transparent. Main added a test-only prepareCase hook to restore each native fixture before each independent scenario, without weakening production hit testing or assertions. Cats/all humans passed in final-build.log, Nailong targeted rebuild passed in nailong-final-build.log; isolated tests copied to self-tests. Physical success is NOT inferred from them.
 
-Cleanup/pending resources: build products/module cache and consumed installer are removed after basic install audit. Main retains the five2.3 old bundles listed in `.local-evidence/double-click/installation.json` ONLY for this still-pending regression acceptance; release on successful real-input receipt or explicit user abandonment after checking no users. Watch helper `.local-config/watch-physical-double.py` retained only while proc_0dd4 runs; remove on its success/failure/expiry. Agent-owned temporary native probe directory has been copied to evidence and removed. Live apps intentionally remain running; capped diagnostics naturally cease at128 lines or regular restart.
+Cleanup complete after that real-input receipt: removed five2.3 rollback copies, watch helper, build/module cache, installer and accepted agent probe temporary directory after checking usage. Evidence retained; live2.4 apps intentionally remain running with capped diagnostics until the next normal restart. No watcher remains. See `.local-evidence/double-click/cleanup.json`.
 
-## Latest correction / 最新纠正
+## Prior2.3 correction / 前次2.3纠正
 
 User rejected the2.2 imitation and explicitly required actual native NSMenu, no playback provenance captions, and real code reuse. Delivered:
 

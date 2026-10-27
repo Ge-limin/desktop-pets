@@ -90,14 +90,14 @@ func runTests(app: AppDelegate, ui: Bool) {
     check(middle.closed && app.pets.contains { $0 === last }, "close exact middle window")
     app.setCount(3); check(Set(app.pets.map(\.id)).count == 3, "unique IDs after remove/add")
     app.setCount(1)
-    // Actual native menus; reset expression/audio between independent sampled cases.
+    // Production delayed singles and actual native menus; isolated silent playback.
     let view = first.view, picker = NativePetMenu.shared
-    checkImmediateVoiceGestures(view: view, cancel: { first.cancelGesture() }, plays: { first.audio.playCount },
-                               check: { check($0, $1) }, prepareCase: { first.audio.stopAll() })
+    checkDeferredVoiceGestures(view: view, cancel: { first.cancelGesture() }, plays: { first.audio.playCount },
+                               check: { check($0, $1) })
     let soundMenu = first.soundMenu()
     let choices = soundMenu.items.filter { $0.action == #selector(PetController.say(_:)) }
     check(choices.count == 6 && choices.map(\.title) == soundNames && soundMenu.items[0].title.contains("6"), "all six real clips at top level with total")
-    checkImmediateVoiceList(view: view, menu: soundMenu) { check($0, $1) }
+    checkNativeVoiceList(view: view, menu: soundMenu) { check($0, $1) }
     for choice in choices {
         performNativeMenuAction(choice, in: soundMenu)
         check(first.audio.lastPlayed == choice.tag && first.audio.player?.numberOfLoops == 0 && !picker.isTracking, "native menu action plays exact file once")
@@ -111,9 +111,11 @@ func runTests(app: AppDelegate, ui: Bool) {
     withNativeMenuTracking({ first.resize(220) }, open: { picker.present(soundMenu, for: view) })
     check(!picker.isTracking, "resize closes real picker")
     check(view.hitTest(NSPoint(x: 1, y: 1)) == nil, "transparent padding hitTest passes through")
+    checkPendingMenuCancellation(view: view, action: { first.resize(first.height) }) { check($0, $1) }
+    checkPendingMenuCancellation(view: view, action: { app.menuWillOpen(settings) }) { check($0, $1) }
     app.setCount(2); let doomed = app.pets[1]
-    withNativeMenuTracking({ app.setCount(1) }, open: { picker.present(doomed.soundMenu(), for: doomed.view) })
-    check(doomed.closed && !picker.isTracking, "window removal closes list and monitors")
+    checkPendingMenuCancellation(view: doomed.view, action: { app.setCount(1) }) { check($0, $1) }
+    check(doomed.closed && !picker.isTracking, "window removal cancels delayed list")
     // Audio replacement must reject a stale completion callback.
     _ = first.audio.play(0)
     let stale = first.audio.player!; _ = first.audio.play(2)

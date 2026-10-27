@@ -1,47 +1,63 @@
 import AppKit
 
-// Opt-in, discrete phases only: no coordinates, menu contents or foreign input.
+// Opt-in, discrete phases only; never sample pointer/button state for tracing.
 private var gestureTraceLines = 0
 private func gestureTrace(_ phase: String) {
     guard CommandLine.arguments.contains("--gesture-trace"), gestureTraceLines < 128 else { return }
     gestureTraceLines += 1; fputs("[gesture] \(phase)\n", stderr)
 }
 
-struct NativePressSample {
-    var time: TimeInterval
-    var point: NSPoint // screen coordinates
-    var left: Bool
-    var right: Bool = false
-    var windowNumber: Int? = nil
-}
-
-// The ONLY menu renderer for both buttons. The sampler exists only for the
-// double-click window of a left menu, plus a bounded captured press handoff.
+// Both buttons use this same real NSMenu renderer. Only left single-click waits.
 final class NativePetMenu {
     static let shared = NativePetMenu()
+    static let clickInterval: TimeInterval = 0.3
     private(set) var menu: NSMenu?
     private(set) weak var owner: NSView?
-    private var press: NativeTrackedPress?
+    private var pending: Timer?
+    private var pendingClick: (time: TimeInterval, windowNumber: Int)?
+    var hasPendingMenu: Bool { pending != nil }
     var isTracking: Bool { menu != nil }
     static func traceDoublePlayback(_ playing: Bool) {
         gestureTrace(playing ? "NATIVE_DOUBLE_COMPLETED" : "DOUBLE_ACTION_DELIVERED_PLAYBACK_NOT_RUNNING")
     }
-    var hasPressSampler: Bool { press?.isActive == true }
-    // Injection is used by silent tests inside the actual NSMenu tracking loop.
-    var sampleForTesting: (() -> NativePressSample)?
-
-    func isHandlingPress(for view: NSView) -> Bool { press?.view === view && press?.captured == true && press?.isActive == true }
-    func dismiss() {
-        press?.cancel(); press = nil
-        menu?.cancelTrackingWithoutAnimation()
-    }
-    func present(_ menu: NSMenu, for view: NSView, event: NSEvent? = nil,
-                 sequence: ImmediateClickSequence? = nil,
-                 onDouble: (() -> Bool)? = nil, onDragEnd: (() -> Void)? = nil) {
-        guard let window = view.window, !isTracking else { return }
+    // Keep AppKit's spatial classification, but cap the click gap at our 0.3s
+    // policy even if the system interval is longer or a menu timer is delayed.
+    func beginLeft(_ event: NSEvent) -> Bool {
+        let timely = pendingClick.map {
+            Self.isWithinClickWindow(firstRelease: $0.time, secondPress: event.timestamp) &&
+            $0.windowNumber == event.windowNumber
+        } ?? false
+        let second = event.clickCount == 2 && pending != nil && timely
         dismiss()
-        // Snapshot BEFORE update/popUp can notify clients and clear their sequence.
-        let first = sequence?.snapshot
+        return second
+    }
+    static func isWithinClickWindow(firstRelease: TimeInterval, secondPress: TimeInterval) -> Bool {
+        secondPress >= firstRelease && secondPress <= firstRelease + clickInterval
+    }
+    func dismiss() {
+        pending?.invalidate(); pending = nil; pendingClick = nil
+        menu?.cancelTrackingWithoutAnimation()
+        if menu == nil { owner = nil }
+    }
+    func scheduleLeft(for view: NSView, after event: NSEvent, makeMenu: @escaping () -> NSMenu?) {
+        dismiss()
+        guard let window = view.window else { return }
+        owner = view
+        pendingClick = (event.timestamp, event.windowNumber)
+        let timer = Timer(timeInterval: Self.clickInterval, repeats: false) { [weak self, weak view, weak window] timer in
+            guard let self, self.pending === timer else { return }
+            self.pending = nil; self.pendingClick = nil; self.owner = nil
+            guard let view, let window, view.window === window, window.isVisible,
+                  !view.isHiddenOrHasHiddenAncestor, let menu = makeMenu() else { return }
+            self.present(menu, for: view)
+        }
+        pending = timer
+        RunLoop.main.add(timer, forMode: .common)
+        gestureTrace("LEFT_MENU_PENDING")
+    }
+    func present(_ menu: NSMenu, for view: NSView, event: NSEvent? = nil) {
+        dismiss()
+        guard let window = view.window, !isTracking else { return }
         self.menu = menu; owner = view
         menu.update()
         let screen = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
@@ -52,178 +68,10 @@ final class NativePetMenu {
                 ? window.frame.maxX + 4 : window.frame.minX - menu.size.width - 4
             point = NSPoint(x: max(screen.minX, x), y: min(screen.maxY, max(window.frame.maxY, screen.minY + menu.size.height)))
         }
-        let tracking: NativeTrackedPress?
-        if event == nil, let first, let sequence, let onDouble {
-            tracking = NativeTrackedPress(view: view, menu: menu, sequence: sequence,
-                firstTime: first.time, firstPoint: window.convertPoint(toScreen: first.point),
-                sample: sampleForTesting, onDouble: onDouble, onDragEnd: onDragEnd)
-        } else { tracking = nil }
-        press = tracking
         if event == nil { gestureTrace("LEFT_MENU_OPEN") }
-        tracking?.start()
-        let selected = menu.popUp(positioning: nil, at: point, in: nil)
+        _ = menu.popUp(positioning: nil, at: point, in: nil)
         self.menu = nil; owner = nil
-        tracking?.menuReturned(selected: selected)
-        if tracking?.isActive != true { press = nil }
     }
-}
-
-// No fake down/up, event taps, AX, CGEventPost or global monitors. A sampled
-// second press owns its semantic outcome; native releases cannot play twice.
-private final class NativeTrackedPress {
-    weak var view: NSView?
-    private weak var window: NSWindow?
-    private weak var menu: NSMenu?
-    private weak var sequence: ImmediateClickSequence?
-    private let firstTime: TimeInterval, firstPoint: NSPoint
-    private let sample: () -> NativePressSample
-    private let onDouble: () -> Bool
-    private let onDragEnd: (() -> Void)?
-    private var timer: Timer?, monitor: Any?
-    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
-    private var origin = NSPoint.zero, downPoint = NSPoint.zero
-    private var deadline: TimeInterval
-    private var dragged = false, released = false, returned = false
-    private(set) var captured = false
-    private(set) var isActive = true
-
-    init(view: NSView, menu: NSMenu, sequence: ImmediateClickSequence, firstTime: TimeInterval,
-         firstPoint: NSPoint, sample: (() -> NativePressSample)?,
-         onDouble: @escaping () -> Bool, onDragEnd: (() -> Void)?) {
-        self.view = view; window = view.window; self.menu = menu; self.sequence = sequence
-        self.firstTime = firstTime; self.firstPoint = firstPoint
-        self.onDouble = onDouble; self.onDragEnd = onDragEnd
-        deadline = firstTime + NSEvent.doubleClickInterval
-        self.sample = sample ?? {
-            let point = NSEvent.mouseLocation
-            return NativePressSample(time: ProcessInfo.processInfo.systemUptime, point: point,
-                left: CGEventSource.buttonState(.combinedSessionState, button: .left),
-                right: CGEventSource.buttonState(.combinedSessionState, button: .right))
-        }
-    }
-    func start() {
-        for name in [NSWindow.willCloseNotification, NSWindow.didResignKeyNotification] {
-            let center = NotificationCenter.default
-            observers.append((center, center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in self?.cancel(reason: "WINDOW_LIFECYCLE") }))
-        }
-        let center = NSWorkspace.shared.notificationCenter
-        observers.append((center, center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] notification in
-            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-               app.processIdentifier != ProcessInfo.processInfo.processIdentifier { self?.cancel(reason: "FOREGROUND_CHANGED") }
-        }))
-        let timer = Timer(timeInterval: 0.001, repeats: true) { [weak self] _ in self?.poll() }
-        self.timer = timer
-        RunLoop.main.add(timer, forMode: .eventTracking)
-        RunLoop.main.add(timer, forMode: .common)
-        // Local only; not used to detect the second down hidden by native tracking.
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .rightMouseDown, .leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
-            guard let self, self.isActive else { return event }
-            if event.type == .rightMouseDown || (event.type == .keyDown && event.keyCode == 53) {
-                self.cancel(reason: "ESCAPE_OR_RIGHT"); self.menu?.cancelTrackingWithoutAnimation(); return event
-            }
-            guard self.captured, event.window === self.window else { return event }
-            if event.type == .leftMouseDragged || event.type == .leftMouseUp {
-                let point = self.window!.convertPoint(toScreen: event.locationInWindow)
-                self.observeHeld(point: point, up: event.type == .leftMouseUp, time: event.timestamp)
-                return nil
-            }
-            if event.type == .leftMouseDown { return nil }
-            return event
-        }
-    }
-    private func poll() {
-        guard isActive, let view, let window, view.window === window, window.isVisible, !view.isHidden else { cancel(reason: "WINDOW_UNAVAILABLE"); return }
-        let state = sample()
-        guard !state.right, state.time <= deadline else { cancel(reason: state.right ? "RIGHT_BUTTON" : "TIMEOUT"); return }
-        if !captured {
-            guard state.left else { return }
-            // The top window and alpha-aware original-view hit BOTH must match.
-            // A nearby click on another pet/app is never appropriated.
-            let point = view.convert(window.convertPoint(fromScreen: state.point), from: nil)
-            let parentPoint = view.convert(point, to: view.superview)
-            guard (state.windowNumber ?? NSWindow.windowNumber(at: state.point, belowWindowWithWindowNumber: 0)) == window.windowNumber,
-                  ImmediateClickSequence.matchesSecondPress(first: firstPoint, firstTime: firstTime, point: state.point, time: state.time),
-                  view.bounds.contains(point), let hit = view.hitTest(parentPoint),
-                  hit === view || hit.isDescendant(of: view) else { cancel(reason: "SECOND_DOWN_OUTSIDE_VALID_TARGET_OR_TIME"); return }
-            captured = true; downPoint = state.point; origin = window.frame.origin
-            deadline = state.time + 10 // lost-up/lock safety: never an idle poller
-            sequence?.ignoreNativeDowns(through: state.time)
-            gestureTrace("SECOND_DOWN_CAPTURED")
-            // Cancel after capture, not after release: menu cannot select a row
-            // during the captured drag. Completion waits for popUp to unwind.
-            // Animated cancellation can keep NSMenu tracking after the release;
-            // immediate cancellation is essential for deterministic ownership.
-            menu?.cancelTrackingWithoutAnimation()
-        } else { observeHeld(point: state.point, up: !state.left, time: state.time) }
-    }
-    private func observeHeld(point: NSPoint, up: Bool, time: TimeInterval) {
-        guard isActive, !released, let window else { return }
-        sequence?.ignoreNativeDowns(through: time)
-        let dx = point.x - downPoint.x, dy = point.y - downPoint.y
-        if hypot(dx, dy) > 0 {
-            if !dragged { gestureTrace("SECOND_DRAG_OBSERVED") }; dragged = true
-        }
-        if dragged { window.setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y + dy)) }
-        if up {
-            released = true; gestureTrace("SECOND_UP_OBSERVED")
-            stopObservation()
-            if returned { complete() }
-        }
-    }
-    func menuReturned(selected: Bool) {
-        returned = true
-        guard !selected, captured, isActive else { cancel(reason: selected ? "MENU_SELECTION" : "MENU_CLOSED_WITHOUT_CAPTURE"); return }
-        // This is only a continuation of an already observed down, NEVER a
-        // post-pop held-button gate. Fast/native-consumed release is sampled here.
-        if released { complete() } else { poll() }
-    }
-    private func complete() {
-        guard isActive, released else { return }
-        isActive = false; stopObservation()
-        if dragged { onDragEnd?(); gestureTrace("NATIVE_DRAG_COMPLETED") }
-        else { NativePetMenu.traceDoublePlayback(onDouble()) }
-    }
-    func cancel(reason: String = "EXPLICIT_CANCEL") {
-        guard isActive else { return }
-        if captured { sequence?.ignoreNativeDowns(through: ProcessInfo.processInfo.systemUptime) }
-        isActive = false; stopObservation(); gestureTrace("HANDOFF_CANCELLED \(reason)")
-    }
-    private func stopObservation() {
-        timer?.invalidate(); timer = nil
-        for (center, token) in observers { center.removeObserver(token) }; observers.removeAll()
-        if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil
-    }
-    deinit { stopObservation() }
-}
-
-final class ImmediateClickSequence {
-    private var previous: (time: TimeInterval, point: NSPoint)?
-    fileprivate var snapshot: (time: TimeInterval, point: NSPoint)? { previous }
-    private var ignoredDownThrough: TimeInterval = -.infinity
-    func acceptsDown(_ event: NSEvent, in view: NSView) -> Bool {
-        event.timestamp > ignoredDownThrough && !NativePetMenu.shared.isHandlingPress(for: view)
-    }
-    fileprivate func ignoreNativeDowns(through time: TimeInterval) {
-        ignoredDownThrough = max(ignoredDownThrough, time); previous = nil
-    }
-    func begin(_ event: NSEvent, in view: NSView) -> Bool {
-        let point = event.locationInWindow
-        let fallback = previous.map {
-            event.clickCount == 1 && Self.matchesSecondPress(first: $0.point, firstTime: $0.time, point: point, time: event.timestamp)
-        } ?? false
-        let second = event.clickCount == 2 || fallback
-        previous = second || event.clickCount > 2 ? nil : (event.timestamp, point)
-        NativePetMenu.shared.dismiss()
-        return second
-    }
-    func canResumeNativePress(at point: NSPoint, time: TimeInterval) -> Bool {
-        guard let previous else { return false }
-        return Self.matchesSecondPress(first: previous.point, firstTime: previous.time, point: point, time: time)
-    }
-    static func matchesSecondPress(first: NSPoint, firstTime: TimeInterval, point: NSPoint, time: TimeInterval) -> Bool {
-        time >= firstTime && time - firstTime <= NSEvent.doubleClickInterval && hypot(point.x - first.x, point.y - first.y) <= 4
-    }
-    func cancel() { previous = nil; NativePetMenu.shared.dismiss() }
 }
 
 // Bounded REAL NSMenu tests. Timer runs inside AppKit's nested event-tracking
@@ -247,7 +95,7 @@ private func nativeMenuWindows() -> [[String: Any]] {
     }
 }
 
-func checkImmediateVoiceList(view: NSView, menu: NSMenu, check: (Bool, String) -> Void) {
+func checkNativeVoiceList(view: NSView, menu: NSMenu, check: (Bool, String) -> Void) {
     var entered = false, nativeWindow = false, screenshotError: String?
     let originalItems = menu.items
     withNativeMenuTracking({
@@ -286,102 +134,115 @@ func performNativeMenuAction(_ item: NSMenuItem, in menu: NSMenu) {
     if index >= 0 { menu.performActionForItem(at: index) }
 }
 
-func checkImmediateVoiceGestures(view: NSView, cancel: () -> Void, plays: () -> Int, check: (Bool, String) -> Void, prepareCase: () -> Void = {}) {
-    guard let host = view.window else { check(false, "gesture requires pet window"); return }
-    let origin = host.frame.origin
-    checkSampledNativePress(view: view, cancel: cancel, plays: plays, check: check, prepareCase: prepareCase)
-    let zero = NSPoint.zero, interval = NSEvent.doubleClickInterval
-    check(ImmediateClickSequence.matchesSecondPress(first: zero, firstTime: 10, point: NSPoint(x: 4, y: 0), time: 10 + interval * 0.5), "native sampled press pure gate admits near timely second press")
-    check(!ImmediateClickSequence.matchesSecondPress(first: zero, firstTime: 10, point: NSPoint(x: 5, y: 0), time: 10) &&
-          !ImmediateClickSequence.matchesSecondPress(first: zero, firstTime: 10, point: zero, time: 10 + interval + 0.01) &&
-          !ImmediateClickSequence.matchesSecondPress(first: zero, firstTime: 10, point: zero, time: 9), "native sampled press pure gate rejects distance, expired and reversed timestamps")
-    var time = ProcessInfo.processInfo.systemUptime
-    func event(_ type: NSEvent.EventType, _ count: Int = 1, _ dx: CGFloat = 0) -> NSEvent {
-        NSEvent.mouseEvent(with: type, location: NSPoint(x: view.bounds.midX + dx, y: view.bounds.midY), modifierFlags: [],
-            timestamp: time, windowNumber: host.windowNumber, context: nil, eventNumber: 1, clickCount: count, pressure: 1)!
-    }
-    cancel()
-    let before = plays()
-    var entered = false
-    withNativeMenuTracking({ entered = NativePetMenu.shared.isTracking }, open: {
-        view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp))
-    })
-    check(entered && plays() == before, "single release immediately enters REAL native menu without playback")
-    // Direct-handler unit coverage only: not evidence about OS-swallowed downs.
-    for count in [2, 1] {
-        cancel(); time += NSEvent.doubleClickInterval + 1
-        withNativeMenuTracking({}, open: {
-            view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp))
-        })
-        time += NSEvent.doubleClickInterval * 0.3
-        let n = plays()
-        view.mouseDown(with: event(.leftMouseDown, count)); view.mouseUp(with: event(.leftMouseUp, count))
-        check(plays() == n + 1 && !NativePetMenu.shared.isTracking, "direct-handler double/count-reset plays exactly once (not physical tracking proof)")
-    }
-    for count in [1, 2] {
-        for dx: CGFloat in [1, 30] {
-            cancel(); let n = plays(), start = host.frame.origin
-            view.mouseDown(with: event(.leftMouseDown, count)); view.mouseDragged(with: event(.leftMouseDragged, count, dx))
-            view.mouseUp(with: event(.leftMouseUp, count, dx))
-            check(plays() == n && !NativePetMenu.shared.isTracking && abs(host.frame.minX - start.x - dx) < 0.1,
-                  "direct-handler ordinary/second/tiny drag only moves")
-        }
-    }
-    cancel(); host.setFrameOrigin(origin)
+// Handler-delivered events exercise the production delay and actual NSMenu loop;
+// they are not a claim of new physical-input acceptance.
+private func pumpMenuTests(_ duration: TimeInterval) {
+    let end = Date().addingTimeInterval(duration)
+    while Date() < end { _ = RunLoop.main.run(mode: .default, before: end) }
 }
 
-// Injected button states, REAL nested NSMenu loop and actual app action adapters.
-// Deliberately NOT proof of physical WindowServer sampling/timing.
-private func checkSampledNativePress(view: NSView, cancel: () -> Void, plays: () -> Int, check: (Bool, String) -> Void, prepareCase: () -> Void) {
-    guard let window = view.window else { check(false, "sampled press needs window"); return }
-    let presenter = NativePetMenu.shared, wasVisible = window.isVisible, original = window.frame.origin
-    window.orderFrontRegardless()
-    defer { cancel(); presenter.sampleForTesting = nil; window.setFrameOrigin(original); if !wasVisible { window.orderOut(nil) } }
-    // Independent scenarios start from the same visual state. Otherwise a prior
-    // successful cat play animates the stored hit point into transparent padding.
-    prepareCase()
-    // Native pets are alpha hit-tested; find a valid original hit, not padding.
-    var local: NSPoint?
-    for y in stride(from: 0.5, to: 1.0, by: 0.04) {
-        for x in stride(from: 0.2, to: 0.8, by: 0.04) {
-            let p = NSPoint(x: view.bounds.width * x, y: view.bounds.height * y)
-            if let hit = view.hitTest(view.convert(p, to: view.superview)), hit === view || hit.isDescendant(of: view) { local = p; break }
+func checkDeferredVoiceGestures(view: NSView, cancel: () -> Void, plays: () -> Int, check: (Bool, String) -> Void) {
+    guard let host = view.window else { check(false, "gesture requires pet window"); return }
+    let picker = NativePetMenu.shared, origin = host.frame.origin, interval = NativePetMenu.clickInterval
+    check(interval == 0.3 && NativePetMenu.isWithinClickWindow(firstRelease: 0, secondPress: 0.29) &&
+          NativePetMenu.isWithinClickWindow(firstRelease: 0, secondPress: 0.3) &&
+          !NativePetMenu.isWithinClickWindow(firstRelease: 0, secondPress: 0.31) &&
+          !NativePetMenu.isWithinClickWindow(firstRelease: 1, secondPress: 0), "shared 0.3s click window admits boundary and rejects late/reversed timestamps")
+    let wasVisible = host.isVisible
+    if !wasVisible { host.orderFrontRegardless() }
+    var openings: [TimeInterval] = [], sawNativeWindow = false
+    var observedMenu: NSMenu?, trackingBegan: TimeInterval = 0
+    // Native tracking can begin before WindowServer publishes its window. Wait
+    // for that actual window (bounded), rather than cancelling it on the first tick.
+    let watchdog = Timer(timeInterval: 0.01, repeats: true) { _ in
+        guard let menu = picker.menu else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if observedMenu !== menu {
+            observedMenu = menu; trackingBegan = now; openings.append(now)
         }
-        if local != nil { break }
+        let visible = !nativeMenuWindows().isEmpty
+        sawNativeWindow = sawNativeWindow || visible
+        if visible || now - trackingBegan >= 0.2 { picker.dismiss() }
     }
-    guard let local else { check(false, "sampled press valid original-view hit"); return }
-    for scenario in ["fast-up", "held-up", "tiny-drag", "foreign-window", "right", "expired", "cancel-after-down"] {
-        cancel(); prepareCase(); window.setFrameOrigin(original)
-        let location = view.convert(local, to: nil), screenPoint = window.convertPoint(toScreen: location)
-        let start = ProcessInfo.processInfo.systemUptime, before = plays()
-        var samples = 0, capturedInsideMenu = false
-        presenter.sampleForTesting = {
-            samples += 1
-            let down = samples >= 2 && samples < (scenario == "held-up" ? 6 : (scenario == "fast-up" ? 3 : 4))
-            if samples == 2 { capturedInsideMenu = presenter.isTracking && RunLoop.current.currentMode == .eventTracking }
-            if scenario == "cancel-after-down" && samples == 3 { presenter.dismiss() }
-            return NativePressSample(time: scenario == "expired" ? start + NSEvent.doubleClickInterval + 1 : ProcessInfo.processInfo.systemUptime,
-                point: NSPoint(x: screenPoint.x + (scenario == "tiny-drag" && samples >= 3 ? 1 : 0), y: screenPoint.y),
-                left: down, right: scenario == "right" && samples == 2,
-                windowNumber: scenario == "foreign-window" ? -1 : window.windowNumber)
-        }
-        func event(_ type: NSEvent.EventType) -> NSEvent {
-            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: start,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
-        }
-        // Watchdog also bounds rejection cases that correctly leave NSMenu open.
-        withNativeMenuTracking({}, open: { view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp)) })
-        let deadline = Date(timeIntervalSinceNow: 0.03)
-        while presenter.hasPressSampler && Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.002)) }
-        let expected = ["fast-up", "held-up"].contains(scenario) ? 1 : 0
-        check(plays() == before + expected && !presenter.hasPressSampler, "injected native-loop \(scenario): exact action count, observation stopped (not physical proof)")
-        if expected == 1 || scenario == "tiny-drag" { check(capturedInsideMenu, "second down sampled INSIDE real native tracking: \(scenario)") }
-        if scenario == "tiny-drag" { check(abs(window.frame.minX - original.x - 1) < 0.1, "sampled tiny drag only moves") }
-        // NSMenu may have eaten up, or AppKit may deliver an already consumed
-        // down/up later. Neither may reopen a menu or run a duplicate action.
-        if expected == 1 {
-            view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp))
-            check(plays() == before + 1 && !presenter.isTracking, "late native down/up suppressed after sampled handoff")
+    RunLoop.main.add(watchdog, forMode: .eventTracking)
+    defer { watchdog.invalidate(); cancel(); host.setFrameOrigin(origin); if !wasVisible { host.orderOut(nil) } }
+    func event(_ type: NSEvent.EventType, _ count: Int = 1, _ dx: CGFloat = 0) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: NSPoint(x: view.bounds.midX + dx, y: view.bounds.midY), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: host.windowNumber, context: nil,
+            eventNumber: 1, clickCount: count, pressure: 1)!
+    }
+    func single() {
+        view.mouseDown(with: event(.leftMouseDown)); view.mouseUp(with: event(.leftMouseUp))
+    }
+    cancel()
+    let before = plays(), start = ProcessInfo.processInfo.systemUptime
+    single()
+    check(picker.hasPendingMenu && !picker.isTracking, "first release schedules single menu without opening or playing")
+    pumpMenuTests(interval * 0.8)
+    check(openings.isEmpty && !picker.isTracking && plays() == before, "no native popup before configured 0.3s interval")
+    pumpMenuTests(interval * 0.2 + 0.2)
+    check(openings.count == 1 && openings[0] - start >= interval && sawNativeWindow && plays() == before,
+          "after configured interval single opens actual WindowServer NSMenu once, with bounded watchdog")
+    check(!picker.hasPendingMenu && !picker.isTracking, "expired menu releases its one pending timer and native ownership")
+    for fraction in [0.1, 0.85] {
+        cancel(); let n = plays(), opened = openings.count
+        single(); pumpMenuTests(interval * fraction)
+        check(openings.count == opened && picker.hasPendingMenu, "fast/near-deadline double has no first-click menu flash")
+        view.mouseDown(with: event(.leftMouseDown, 2))
+        check(!picker.hasPendingMenu && !picker.isTracking && plays() == n, "second down cancels delayed single before playback")
+        view.mouseUp(with: event(.leftMouseUp, 2))
+        view.mouseUp(with: event(.leftMouseUp, 2))
+        pumpMenuTests(interval + 0.05)
+        check(plays() == n + 1 && openings.count == opened, "second release plays exactly once; duplicate up and old deadline do nothing")
+    }
+    cancel(); single()
+    if let late = NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+        timestamp: ProcessInfo.processInfo.systemUptime + interval + 0.01, windowNumber: host.windowNumber,
+        context: nil, eventNumber: 1, clickCount: 2, pressure: 1) {
+        check(!picker.beginLeft(late) && !picker.hasPendingMenu,
+              "system clickCount2 cannot bypass configured 0.3s deadline even if timer delivery is late")
+    } else { check(false, "construct late second press") }
+    for count in [1, 2] {
+        for dx: CGFloat in [1, 30] {
+            cancel(); let n = plays(), opened = openings.count, position = host.frame.origin
+            single()
+            view.mouseDown(with: event(.leftMouseDown, count))
+            view.mouseDragged(with: event(.leftMouseDragged, count, dx))
+            view.mouseUp(with: event(.leftMouseUp, count, dx))
+            let moved = abs(host.frame.minX - position.x - dx) < 0.1
+            pumpMenuTests(interval + 0.05)
+            check(plays() == n && openings.count == opened && !picker.hasPendingMenu && moved,
+                  "ordinary/second/tiny drag cancels delayed menu and only moves")
         }
     }
+    cancel(); single(); view.rightMouseDown(with: event(.rightMouseDown))
+    let afterRight = openings.count
+    check(!picker.hasPendingMenu, "right settings cancel pending left immediately")
+    pumpMenuTests(interval + 0.05)
+    check(openings.count == afterRight, "right settings leave no late left popup")
+    cancel(); single(); cancel()
+    let afterCancel = openings.count
+    pumpMenuTests(interval + 0.05)
+    check(openings.count == afterCancel && !picker.hasPendingMenu, "lifecycle cancellation leaves no late popup")
+}
+
+// Use actual left handler scheduling, then each target's real lifecycle action.
+func checkPendingMenuCancellation(view: NSView, action: () -> Void, check: (Bool, String) -> Void) {
+    guard let window = view.window else { check(false, "cancellation requires window"); return }
+    let picker = NativePetMenu.shared
+    for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+        let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: view.bounds.midX, y: view.bounds.midY),
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        if type == .leftMouseDown { view.mouseDown(with: event) } else { view.mouseUp(with: event) }
+    }
+    check(picker.hasPendingMenu, "lifecycle fixture has a production pending single")
+    action()
+    check(!picker.hasPendingMenu, "lifecycle action cancels pending single synchronously")
+    var late = false
+    let watchdog = Timer(timeInterval: 0.01, repeats: true) { _ in late = true; picker.dismiss() }
+    RunLoop.main.add(watchdog, forMode: .eventTracking)
+    pumpMenuTests(NativePetMenu.clickInterval + 0.05)
+    watchdog.invalidate(); picker.dismiss()
+    check(!late, "lifecycle action prevents late native popup after original deadline")
 }

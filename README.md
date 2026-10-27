@@ -6,7 +6,7 @@ One native interaction model for five local macOS pet apps. 一个仓库、一�
 
 | Gesture / 操作 | Behavior / 行为 |
 |---|---|
-| Left click / 单击 | Immediately open the native NSMenu: random, stop and all available items / 立即打开原生NSMenu：随机、停止、全部可选内容 |
+| Left click / 单击 | Wait 0.3s, then open native NSMenu if no second click / 等0.3秒；没有第二下才打开原生菜单 |
 | Choose an item / 选一项 | Play once; for cats, replace the current window's cat and play its animation + sound / 播放一次；猫梗立即换成所选猫并播放动作＋声音 |
 | Double click / 双击 | Cats: immediately replay the current cat; human/Nailong: shuffle a voice / 猫：立即播放当前猫的素材；真人/奶龙：随机一段语音 |
 | Drag / 拖动 | Move only, without triggering playback / 只移动，不触发播放 |
@@ -16,9 +16,9 @@ Both left and right use the same shared native NSMenu presenter—no custom popu
 
 左右键统一调用同一个原生NSMenu入口，不再自绘面板/行样式或灰色按钮块。采用系统菜单紧凑尺寸；屏幕确实放不下全部条目时遵循原生溢出行为，不再伪造多列系统菜单。
 
-The native menu may briefly appear on the first click of a double-click; single-click is never delayed to conceal that. Same-pet playback is exclusive. Stop clears queued replies/playback. Mute keeps the saved volume; muted cats still animate. Positions and settings persist in normal use. Tests are silent and preference-isolated.
+A second press within the configured0.3s interval cancels the pending menu; its release plays once with no menu flash. A lone click opens the menu after that interval. Drag, right click and lifecycle/owner changes cancel pending work. The shared0.3s policy does not change the system mouse setting; there is no global button sampling or native-tracking input handoff. Same-pet playback is exclusive; stop cancels pending replies. Mute preserves volume and cat animation. Settings persist; tests are silent and preference-isolated.
 
-双击的第一下允许列表短暂出现，不用半秒等待掩盖；同一只不叠音，停止会取消等待播放。静音不丢音量，猫静音仍有动作。正常模式保存设置，测试不污染用户偏好。
+按固定0.3秒区分：第二下按下即取消待弹菜单，松开播放一次、不闪菜单；只有单击才在等待结束后弹出。拖动、右键、窗口/生命周期变化会取消等待。不修改系统双击速度，也不采样全局按键或接管原生菜单输入。同一只不叠音；停止取消等待回复，静音保留音量和猫动作；设置持久化，测试静音且隔离用户偏好。
 
 Cross-cat shuffle is an explicit left-menu action, not the cat's double-click. 跨猫随机仅由左键菜单“随机播放”触发，不是双击猫的行为。
 

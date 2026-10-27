@@ -27,7 +27,6 @@ final class PetView: NSView {
     let caption = CaptionField(labelWithString: "")
     var initialMouse = NSPoint.zero
     var initialWindow = NSPoint.zero
-    let clickSequence = ImmediateClickSequence()
     private var doublePress = false
     private var pressActive = false
     var dragged = false
@@ -58,9 +57,9 @@ final class PetView: NSView {
     }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
-        guard clickSequence.acceptsDown(event, in: self) else { return }
+        guard !pressActive else { return }
         pressActive = true
-        doublePress = clickSequence.begin(event, in: self)
+        doublePress = NativePetMenu.shared.beginLeft(event)
         initialMouse = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
         initialWindow = window?.frame.origin ?? .zero
         dragged = false
@@ -69,36 +68,33 @@ final class PetView: NSView {
         guard pressActive else { return }
         let current = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
         let dx = current.x - initialMouse.x, dy = current.y - initialMouse.y
-        if hypot(dx, dy) > 0 { dragged = true; clickSequence.cancel() }
+        if hypot(dx, dy) > 0 { dragged = true; NativePetMenu.shared.dismiss() }
         if dragged { window?.setFrameOrigin(NSPoint(x: initialWindow.x + dx, y: initialWindow.y + dy)) }
     }
     override func mouseUp(with event: NSEvent) {
         guard pressActive else { return }; pressActive = false
-        if dragged { clickSequence.cancel(); owner?.savePosition(); return }
+        if dragged { NativePetMenu.shared.dismiss(); owner?.savePosition(); return }
         guard event.clickCount <= 2 else { return }
         if doublePress {
-            doublePress = false; clickSequence.cancel(); owner?.playAllRandom()
+            doublePress = false; NativePetMenu.shared.dismiss(); owner?.playAllRandom()
             NativePetMenu.traceDoublePlayback(owner?.player?.isPlaying == true); return
         }
         guard window != nil, !isHidden, let owner else { return }
-        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence,
-            onDouble: { [weak owner] in
-                guard let owner else { return false }; owner.playAllRandom(); return owner.player?.isPlaying == true
-            }, onDragEnd: { [weak owner] in owner?.savePosition() })
+        NativePetMenu.shared.scheduleLeft(for: self, after: event) { [weak owner] in owner?.makeClipMenu() }
     }
     override func rightMouseDown(with event: NSEvent) {
-        pressActive = false; clickSequence.cancel()
+        pressActive = false; NativePetMenu.shared.dismiss()
         guard let owner else { return }
         owner.presentPetMenu(owner.makeMenu(), event: event)
     }
     override func viewWillMove(toWindow newWindow: NSWindow?) {
-        pressActive = false; clickSequence.cancel()
+        pressActive = false; NativePetMenu.shared.dismiss()
         super.viewWillMove(toWindow: newWindow)
     }
     override func accessibilityPerformPress() -> Bool {
-        clickSequence.cancel()
+        NativePetMenu.shared.dismiss()
         guard let owner else { return false }
-        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence)
+        NativePetMenu.shared.present(owner.makeClipMenu(), for: self)
         return true
     }
     func animate(_ enabled: Bool) {
@@ -244,7 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         if selfTest { runSelfTest() } else { showCaption("单击选声音 · 双击全量随机 · 右键设置", seconds: 5); if defaults.bool(forKey: "motionEnabled") { setMotionEnabled(true) } }
         updateToolTip()
     }
-    @objc func openStatusMenu() { pet.clickSequence.cancel(); status.menu = makeMenu(); status.button?.performClick(nil); status.menu = nil }
+    @objc func openStatusMenu() { NativePetMenu.shared.dismiss(); status.menu = makeMenu(); status.button?.performClick(nil); status.menu = nil }
     func item(_ title: String, _ action: Selector?, tag: Int = 0) -> NSMenuItem {
         let i = NSMenuItem(title: title, action: action, keyEquivalent: ""); i.target = self; i.tag = tag; return i
     }
@@ -495,9 +491,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         motionStatus = "机身摇晃：正在连接"
         do { try motion.start(executable: executable) } catch { motionStatus = "机身摇晃：" + error.localizedDescription; showCaption(motionStatus) }
     }
-    @objc func quit() { pet.clickSequence.cancel(); NSApp.terminate(nil) }
+    @objc func quit() { NativePetMenu.shared.dismiss(); NSApp.terminate(nil) }
+    func applicationWillResignActive(_ notification: Notification) { NativePetMenu.shared.dismiss() }
+    func applicationDidHide(_ notification: Notification) { NativePetMenu.shared.dismiss() }
     func applicationWillTerminate(_ notification: Notification) {
-        pet?.clickSequence.cancel(); bridge.stop(); companionWork?.cancel(); motion.stop(); player?.stop(); savePosition() }
+        NativePetMenu.shared.dismiss(); bridge.stop(); companionWork?.cancel(); motion.stop(); player?.stop(); savePosition() }
     /// 静音读数合理性：不能是负数，也不能长到把整句吃掉。
     func selfTestLeadSanity() -> Bool {
         for clip in companionPool {
