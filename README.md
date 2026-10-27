@@ -74,11 +74,11 @@ python3 scripts/check-public-tree.py
 
 Actual verification/install status is maintained only in [docs/task-status.md](docs/task-status.md). Existing app bundle identities are retained so saved settings can migrate without resetting user choices. Previous sibling repositories are historical snapshots, not parallel active implementations.
 
-## Credit and future open source / 署名与开源
+## Open source and credit / 开源与署名
 
 Read [CREDITS.md](CREDITS.md) and [LICENSE](LICENSE). Original SunPet/ShaolanPet/FengGe MIT notices are preserved. Dragon-frog is credited for the Nailong media and original toy; its unlicensed assets are **not** relicensed, and its old spring port is removed from this source candidate. Cat media authors remain unresolved where the user's pack lacks provenance.
 
-**Credit is not a redistribution license.** Public code and prebuilt applications containing third-party media are different deliverables. Do not include private media, original download packs or local evidence in a public push/release. `check-public-tree.py` is a hygiene check, not legal clearance. No remote repository or public release is created by this task.
+**Credit is not a redistribution license.** Public code and prebuilt applications containing third-party media are different deliverables. Do not include private media, original download packs or local evidence in a public push/release. `check-public-tree.py` is a hygiene check, not legal clearance. This repository distributes source code only; it does not distribute the local media packs or prebuilt applications. 本仓库仅公开源码，不提供本机素材包或带素材的安装包。
 
 ## Local install / 本机安装
 

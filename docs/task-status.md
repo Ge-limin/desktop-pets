@@ -4,7 +4,11 @@ Status: completed; fixed0.3s2.6/build8 installed and verified in all five apps
 Updated: 2026-10-27
 Owner: main Pi integration session. eebfcbb8-c9bf-4c6 completed/frozen; main integrated visibility/WindowServer-readiness test fixtures and latest user-selected0.3s deadline.
 
-## Current request / 当前需求
+## Source publication / 源码开源
+
+User explicitly authorized “commit push, 帮我开源” and then “继续”. Public repository created at https://github.com/Ge-limin/desktop-pets under the existing authenticated account; `origin` configured. Initial push pending. Scope is source/history/licenses/docs only: no local media, app binaries, original download pack or diagnostic evidence. Complete existing main history audit covered6 commits/121 unique blobs with no excluded media, machine-specific paths or matched secret patterns; this is bounded hygiene evidence, not legal clearance. Public-tree check passes63 tracked source candidates. No new code/runtime changes for publication; prior build verification remains applicable.
+
+## Current implementation / 当前实现
 
 User chose conventional delayed-single, then explicitly fixed the interval to0.3s instead of the system's current0.5s. This REPLACES the earlier immediate-single requirement. Single waits0.3s, a timely second down cancels the pending menu and second release plays once; drag/right/status-menu/owner/lifecycle changes cancel. Shared constant `NativePetMenu.clickInterval=0.3` drives all five menus. Pending click stores the real release timestamp/window ID so a late system clickCount2 cannot bypass the app's0.3s cap, even if timer delivery is delayed. System mouse preferences are untouched. Cats still play current role; human/Nailong shuffle their own voices.
 

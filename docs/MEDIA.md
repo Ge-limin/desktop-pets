@@ -22,9 +22,9 @@ Supply personally permitted media under the ignored `.local-media/` directory:
       Animation/00000.png ...
 ```
 
-The three human targets retain their upstream `clips.json` layouts and require their corresponding exact media, not a shared generic sound folder. Nailong filenames and schemas are defined in its source. The Cat target loads its role directories dynamically.
+The three human targets retain their upstream `clips.json` layouts and require their corresponding exact media, not a shared generic sound folder. Nailong filenames and schemas are defined in its source. The Cat target loads its role directories dynamically; the bundled self-tests validate the original ten-role catalog, not arbitrary replacement catalogs. Those IDs are `angry-cat`, `bababoy-cat`, `banana-cat`, `giggle-cat`, `happy-cat`, `huh-cat`, `oiiai-cat`, `orange-question-cat`, `question-cat`, and `sad-cat`.
 
-三个真人目标沿用各自上游资源结构，不能混用同名素材。猫角色按目录动态加载。自行提供素材前核实授权；公开仓库能下载不等于可重发素材。
+三个真人目标沿用各自上游资源结构，不能混用同名素材。猫角色按目录动态加载，但随仓自测验收的是上述固定10角色及真人28/37/11段、奶龙6段素材，并非任意替换素材集。自行提供素材前核实授权；公开仓库能下载不等于可重发素材。
 
 ## Cat metadata / 猫元数据
 
@@ -69,4 +69,4 @@ The preparation tool uses already installed FFmpeg/FFprobe and Pillow (offline b
 
 ## Release rule / 发布规则
 
-Before publishing code, run `python3 scripts/check-public-tree.py`. The check rejects media/binary/archive files, private folders accidentally staged, and machine-specific paths. It cannot prove legal authorization. Do not upload `.local-media/`, `.local-config/`, `.local-evidence/`, `build/`, or the user's download pack. Source-only publication and distribution of a prebuilt app containing media are different acts; this task performs neither.
+Before publishing code, run `python3 scripts/check-public-tree.py`. The check rejects media/binary/archive files, private folders accidentally staged, and machine-specific paths. It cannot prove legal authorization. Do not upload `.local-media/`, `.local-config/`, `.local-evidence/`, `build/`, or the user's download pack. Source-only publication and distribution of a prebuilt app containing media are different acts; this repository provides only the former.

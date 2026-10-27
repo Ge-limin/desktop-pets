@@ -25,6 +25,6 @@ Original MIT texts, copyright notices and upstream NOTICE files are retained in 
 
 ## Publication boundary / 开源边界
 
-The repository's code may be prepared for public release subject to its retained licenses. `.local-media/`, `.local-config/`, `.local-evidence/` and `build/` are ignored and must not be uploaded or included in public binaries. Use your own permitted assets; check both source and media permissions before any release. No repository upload, public release or rights clearance has been performed by this task.
+The repository publishes source code under its retained licenses. `.local-media/`, `.local-config/`, `.local-evidence/` and `build/` are ignored and must not be uploaded or included in public binaries. Use your own permitted assets; check both source and media permissions before any release. Source publication does not establish media rights clearance or authorize a media-containing binary release.
 
-可公开候选是源代码与合法许可文件，不是本机有媒体的安装包。未完成作者/权限核验的素材不能因附上credit就公开。此次任务不创建远程仓库、不推送、不发布，也不宣称完成素材授权清理。
+公开内容是源代码与合法许可文件，不是本机有媒体的安装包。未完成作者/权限核验的素材不能因附上credit就公开。源码开源不代表完成素材授权核验，也不代表可以分发含素材的安装包。
