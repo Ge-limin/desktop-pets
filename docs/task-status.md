@@ -1,14 +1,22 @@
 # Integration status / 整合状态
 
-Status: completed; fixed0.3s2.6/build8 installed and verified in all five apps
+Status: completed — natural reply timing2.7/build9 installed and verified for three human apps; Cats/Nailong unchanged at2.6/build8
 Updated: 2026-10-27
-Owner: main Pi integration session. eebfcbb8-c9bf-4c6 completed/frozen; main integrated visibility/WindowServer-readiness test fixtures and latest user-selected0.3s deadline.
+Owner: main Pi integration session accepted, built and installed the candidate from completed/frozen subagent tool task79db8431-5a7c-406. All delegated write scopes are closed.
+
+## Current task / 当前任务
+
+User reported replies were too fast and asked for comparison with the original authors. Pinned upstream Sun (`Upstream/Sources/main.swift:126,330–331`) and GoodThing (`:145,263–264`) schedule `max(.02, duration − overlap − lead)`: .3s overlap normally, .2s at hop1. Shaolan (`:152,261`) has the .3s formula but its upstream receiver is not wired. Thus the original policy deliberately overlaps the predecessor's tail; actual AVAudioPlayer durations were already broadcast upstream and remain so.
+
+All three active targets now call `Shared/Human/HumanReplyTiming.swift`: `delay = duration + max(.15, random(0.35...0.65) − leadingSilence)` (range is .35–.65 seconds). No intentional early start. Long leading silence may make the audible pause longer. The150ms minimum end buffer follows five muted audio measurements of103–116ms completion lag; the earlier zero-buffer candidate failed a long-lead test and was corrected rather than relaxing the assertion. This remains duration-based scheduling, not a cross-process finish acknowledgement or global peer queue: independent responders may still overlap each other.
+
+Source filters, master switches, two-round depth, cancellation/manual priority, actual-duration announcements and all gestures retained. Agent evidence:103 deterministic/real-muted-audio checks passed; Sun typecheck passed. Main froze compiler inputs, built all three humans, and passed all app self-tests (Sun250, Shaolan252, GoodThing226 checks). Staged/signed candidates installed as2.7/build9; tested hashes, normal single-instance visible windows and exact current preference preservation verified. Cats/Nailong executables and versions are unchanged. No microphone/onset measurement or new physical listening claim. Evidence: `.local-evidence/reply-timing/` and `.local-evidence/reply-timing-agent/`. Removed task-owned staging/backups, build/module cache and one-off installer/helper after acceptance; retained only necessary ignored evidence and original media. No public push was performed for this timing change.
 
 ## Source publication / 源码开源
 
 User explicitly authorized “commit push, 帮我开源” and then “继续”. Public repository created at https://github.com/Ge-limin/desktop-pets under the existing authenticated account; `origin/main` published. Initial published commit `1bc0614` was verified identical to local HEAD, visibility public, default branch main, and complete remote tree identical to all63 tracked files. Root MIT formatting was standardized after GitHub reported Other; source-only/media and original-author boundaries remain in README/CREDITS and all upstream notices remain unchanged. Scope is source/history/licenses/docs only: no local media, app binaries, original download pack or diagnostic evidence. Complete existing main history audit covered6 commits/121 unique blobs with no excluded media, machine-specific paths or matched secret patterns; this is bounded hygiene evidence, not legal clearance. Public-tree check passes63 tracked source candidates. No new code/runtime changes for publication; prior build verification remains applicable.
 
-## Current implementation / 当前实现
+## Verified interaction baseline / 已验证交互基线
 
 User chose conventional delayed-single, then explicitly fixed the interval to0.3s instead of the system's current0.5s. This REPLACES the earlier immediate-single requirement. Single waits0.3s, a timely second down cancels the pending menu and second release plays once; drag/right/status-menu/owner/lifecycle changes cancel. Shared constant `NativePetMenu.clickInterval=0.3` drives all five menus. Pending click stores the real release timestamp/window ID so a late system clickCount2 cannot bypass the app's0.3s cap, even if timer delivery is delayed. System mouse preferences are untouched. Cats still play current role; human/Nailong shuffle their own voices.
 
@@ -95,4 +103,4 @@ After successful installation checks, removed this task's build products/module 
 
 ## Publication boundary / 发布边界
 
-Code is prepared for future review/release, not published. Portraits, recordings, Nailong media and cat assets require independent rights review. Unknown cat authors are explicitly unresolved; credit is not permission. A source-only clone intentionally cannot build until the user supplies suitable private/permitted media; build failures expose missing media instead of downloading/replacing it silently.
+Source code is public at https://github.com/Ge-limin/desktop-pets; this does not authorize media or binary releases. Portraits, recordings, Nailong media and cat assets require independent rights review. Unknown cat authors are explicitly unresolved; credit is not permission. A source-only clone intentionally cannot build until the user supplies suitable private/permitted media; build failures expose missing media instead of downloading/replacing it silently.

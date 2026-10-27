@@ -58,11 +58,12 @@ extension AppDelegate {
     /// Receiving is optional; manual announcements remain available when autoreply is off.
     /// Tests record intent without touching the global bus or the real defaults domain.
     func announcePlayback(_ clip: Clip, duration: TimeInterval, hop: Int, root: PetRole?) {
-        if selfTest { testAnnouncements.append((hop, root ?? bridge.me)); return }
+        if selfTest { testAnnouncements.append((hop, root ?? bridge.me, duration)); return }
         bridge.announceSpeaking(clipID: clip.id, duration: duration, label: clip.label, hop: hop, root: root)
     }
 
     func runSharedReplyConfigurationSelfTest(check: (Bool, String) -> Void, stopPlayback: () -> Void) {
+        HumanReplyTiming.runSelfTest(check: check)
         let others = PetRole.allCases.filter { $0 != bridge.me }
         let first = others[0], second = others[1]
         func event(_ from: PetRole, _ hop: Int = 0, root: PetRole? = nil) -> [AnyHashable: Any] {
@@ -110,6 +111,7 @@ extension AppDelegate {
         play(clips[0])
         check(!bridgeEnabled && testAnnouncements.count == beforeManual + 1 && testAnnouncements.last?.hop == 0,
               "disabled receiving master still announces manual play through isolated test seam")
+        check(testAnnouncements.last?.duration == player?.duration, "manual announcement uses decoded audio duration")
         idle(); startBridge(); bridge.receiveSpeaking(event(first))
         check(companionWork == nil, "disabled receiver refuses injected manual source")
         toggleBridge()
@@ -124,6 +126,17 @@ extension AppDelegate {
         let beforeReply = testAnnouncements.count; manualWork?.perform()
         check(testAnnouncements.count == beforeReply + 1 && testAnnouncements.last?.hop == 1 && testAnnouncements.last?.root == first,
               "actual queued reply increments hop and preserves root")
+        check(testAnnouncements.last?.duration == player?.duration, "reply announcement uses decoded audio duration")
+
+        idle(); bridge.receiveSpeaking(event(first)); let superseded = companionWork
+        bridge.receiveSpeaking(event(second)); let replacement = companionWork
+        let beforeReplacement = testAnnouncements.count
+        superseded?.perform()
+        check(companionWork === replacement && testAnnouncements.count == beforeReplacement,
+              "latest accepted source supersedes queued reply; stale work cannot play")
+        replacement?.perform()
+        check(testAnnouncements.count == beforeReplacement + 1 && testAnnouncements.last?.root == second,
+              "replacement reply keeps the latest source root")
 
         idle(); toggleReplyChaining(); loadReplyPreferences()
         check(bridge.allowChaining && defaults.bool(forKey: "replyAllowChaining"), "chain opt-in persists/reloads")

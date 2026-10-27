@@ -123,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var clips: [Clip] = []
     var allClipsBag = AllClipsShuffle()
     var testPlaybackIDs: [Int] = []
-    var testAnnouncements: [(hop: Int, root: PetRole)] = []
+    var testAnnouncements: [(hop: Int, root: PetRole, duration: TimeInterval)] = []
     var testPresentedMenus: [NSMenu] = []
     var bag: [Int] = []
     var lastID: Int?
@@ -152,14 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var companionWork: DispatchWorkItem?
     /// 捧哏句预先解码好的播放器，接话时直接用，不用临时读文件。
     var companionPlayers: [Int: AVAudioPlayer] = [:]
-    /// 每句开头有多少静音。剪辑切出来的段落长短不一，最多差到 0.32 秒，
-    /// 不按它补的话同样提前 0.3 秒，实际出声时刻能飘出小半秒。
+    /// 每句开头的静音计入接话停顿，但不会让音频提前于前句结束播放。
     var companionLead: [Int: TimeInterval] = [:]
-    /// 捧哏只挑最短的几句，逗哏一说完就得接上，长句会把节奏拖垮。
+    /// 捧哏只挑最短的几句；接话间隔由共享 HUMAN 策略决定。
     let companionIDs: Set<Int> = [1, 2, 4, 11, 13, 14]
-    /// 接话提前多少开始。像 Apple Music 的交叉淡入：峰哥那句还剩这点时间，捧哏就进来。
-    /// 相声里捧哏本来就是叠着逗哏的尾音接的，等他说完再开口中间会有一截空档。
-    let companionOverlap: TimeInterval = 0.3
     var resources: URL { Bundle.main.resourceURL! }
     let defaults = PetPreferences()
     let selfTest = CommandLine.arguments.contains("--self-test")
@@ -328,8 +324,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         let generation = companionGeneration
         guard let clip = takeCompanionClip() else { return }
         let lead = companionLead[clip.id] ?? 0
-        let overlap = hop == 1 ? max(0.05, companionOverlap - 0.1) : companionOverlap
-        let delay = max(0.02, duration - overlap - lead)
+        guard let delay = HumanReplyTiming.playbackDelay(after: duration, leadingSilence: lead,
+                                                        gap: selfTest ? 0.5 : nil) else { return }
         traceLog("排接话 hop=\(hop) root=\(root.title) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.bridgeEnabled, self.companionGeneration == generation,
