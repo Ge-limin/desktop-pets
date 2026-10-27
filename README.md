@@ -1,59 +1,66 @@
-# Desktop Pets / 统一桌宠
+# Desktop Pets
 
-One native interaction model for five local macOS pet apps. 一个仓库、一个共享快捷面板、五个保留原入口的本机桌宠应用。
+**English** · [简体中文](README.zh-CN.md)
 
-## Interaction / 操作
+Five native macOS desktop-pet apps, one shared interaction model. Each app keeps its own entry point, identity and saved settings.
 
-| Gesture / 操作 | Behavior / 行为 |
+## Contents
+
+- [Interaction](#interaction)
+- [Apps](#apps)
+- [Build](#build)
+- [Repository layout](#repository-layout)
+- [License and credits](#license-and-credits)
+- [Local installation](#local-installation)
+
+## Interaction
+
+| Gesture | Behavior |
 |---|---|
-| Left click / 单击 | Wait 0.3s, then open native NSMenu if no second click / 等0.3秒；没有第二下才打开原生菜单 |
-| Choose an item / 选一项 | Play once; for cats, replace the current window's cat and play its animation + sound / 播放一次；猫梗立即换成所选猫并播放动作＋声音 |
-| Double click / 双击 | Cats: immediately replay the current cat; human/Nailong: shuffle a voice / 猫：立即播放当前猫的素材；真人/奶龙：随机一段语音 |
-| Drag / 拖动 | Move only, without triggering playback / 只移动，不触发播放 |
-| Right click / 右键 | Configuration only: volume, mute, size, Spaces, per-pet options, recover and close / 只配置：音量、静音、大小、显示范围、角色选项、恢复与关闭 |
+| Left click | Wait 0.3 seconds, then open the native menu if no second click arrives. |
+| Choose an item | Play once. Choosing a cat switches the current window to that cat and plays its animation and sound. |
+| Double click | Cats replay their current media; human pets and Nailong shuffle a voice clip. |
+| Drag | Move only, without triggering playback. |
+| Right click | Open settings: volume, mute, size, desktop scope, pet-specific options, recovery and close. |
 
-Both left and right use the same shared native NSMenu presenter—no custom popup, painted rows or gray button blocks. Items use native compact metrics; a display too short for the whole list follows the system's overflow behavior, rather than a fabricated multicolumn menu.
+Both buttons use the same shared native `NSMenu` presenter—no custom popup, painted rows or gray button blocks. Menus use native compact sizing. If a display is too short for the whole list, AppKit handles overflow; there is no imitation multicolumn menu.
 
-左右键统一调用同一个原生NSMenu入口，不再自绘面板/行样式或灰色按钮块。采用系统菜单紧凑尺寸；屏幕确实放不下全部条目时遵循原生溢出行为，不再伪造多列系统菜单。
+A second press within **0.3 seconds** cancels the pending menu; its release plays once, without a menu flash. Dragging, right-clicking and window or lifecycle changes cancel pending work. This setting does not change the system mouse preferences. No global button sampling or native-menu input handoff is used.
 
-A second press within the configured0.3s interval cancels the pending menu; its release plays once with no menu flash. A lone click opens the menu after that interval. Drag, right click and lifecycle/owner changes cancel pending work. The shared0.3s policy does not change the system mouse setting; there is no global button sampling or native-tracking input handoff. Same-pet playback is exclusive; stop cancels pending replies. Mute preserves volume and cat animation. Settings persist; tests are silent and preference-isolated.
+Each pet plays one clip at a time. Stop cancels pending replies. Mute preserves the configured volume, and muted cats still animate. Settings persist; tests are silent and isolated from normal preferences.
 
-按固定0.3秒区分：第二下按下即取消待弹菜单，松开播放一次、不闪菜单；只有单击才在等待结束后弹出。拖动、右键、窗口/生命周期变化会取消等待。不修改系统双击速度，也不采样全局按键或接管原生菜单输入。同一只不叠音；停止取消等待回复，静音保留音量和猫动作；设置持久化，测试静音且隔离用户偏好。
+**Cross-cat shuffle is an explicit action in the left menu**, not the cat's double-click behavior.
 
-Cross-cat shuffle is an explicit left-menu action, not the cat's double-click. 跨猫随机仅由左键菜单“随机播放”触发，不是双击猫的行为。
+Human pets can independently select whose speech they answer. By default, they answer manual playback only. Optional chaining is limited to **two rounds**, not two total messages when multiple peers respond. The master switch controls receiving and answering; manual playback can still be announced to other opted-in listeners. Changing source filters cancels pending replies.
 
-Human autoreplies can select individual sources. By default they answer manual speech only; optional chaining is bounded to2 rounds, not2 global messages when multiple peers answer. The master switch controls receiving/responding; normal manual speech remains announceable for other opted-in listeners. Changing filters cancels pending replies.
-
-真人自动接话可逐个选择来源，默认只接手动播放；可选接龙最多2轮（多人回复时不是全局只发2句）。总开关控制本只是否接话，不阻止其他已开启且勾选它的桌宠听到其手动播放。修改筛选会取消等待中的回复。
-
-## Targets / 应用
+## Apps
 
 | Build target | App | Content |
 |---|---|---|
-| `sun` | SunPet / 太对了 | 28 original voice clips; optional autoreply and motion input / 28原声、可选自动接话与机身摇晃 |
-| `shaolan` | 薄肌桌宠 | 37 clips, full manual shuffle, optional short autoreplies / 37原声、全量手动随机、可选短句接话 |
-| `goodthing` | 好事桌宠 | 11 clips, explicit autoreply switch / 11原声、明确自动接话开关 |
-| `nailong` | 奶龙桌宠 | Six clips, 1–3 independent pets; no overlapping/held laughter / 6原声、1–3只；不再叠音或长按循环 |
-| `cats` | 猫梗桌宠 | Ten local cat memes; one role = one full audiovisual item; 1–3 windows / 10猫梗，一个角色就是一个完整音画项，最多3窗 |
+| `sun` | SunPet | 28 original clips; optional autoreplies and device-motion input. |
+| `shaolan` | ShaolanPet | 37 clips; full manual shuffle and optional short replies. |
+| `goodthing` | GoodThingPet | 11 clips and an explicit autoreply switch. |
+| `nailong` | NailongPet | Six clips and 1–3 independent pets; no overlapping or held looping laughter. |
+| `cats` | Cat Meme Pets | Ten cat memes, each a complete audiovisual item; 1–3 windows. |
 
-Cats display no playback metadata caption such as “原片音轨”; only genuine playback errors are shown. 猫播放时不显示“原片音轨”等素材说明，只保留真正的错误提示。
+Cats preserve the original actions—including Happy's dance and Oiiai's rotation—as transparent, fixed-canvas frames driven by the audio player's actual time. Each active window has a **32 MiB frame-cache limit**. Playback end or stop restores the idle picture and releases animation work.
 
-Cats preserve source actions (including Happy's dance and Oiiai's rotation) as transparent fixed-canvas frames, timed by actual audio playback. A 32MiB frame cache per active window bounds decoded memory. Playback end/stop restores the idle picture and releases animation work. No webpage, camera, microphone, accessibility permission or runtime network service.
+Playback metadata labels are not displayed below cats; genuine playback errors remain visible. The apps require no webpage, camera, microphone, Accessibility permission or external network service.
 
-猫保留原片动作而非静态图晃动，以实际声音进度同步透明帧；每活动窗口32MiB帧缓存上限。结束/停止恢复待机，不空转动画。无网页、摄像头/麦克风/辅助功能权限或运行时网络服务。
+## Build
 
-## Build / 构建
+Requires **Apple Silicon, macOS 14 or later, and Xcode Command Line Tools**. Runtime code uses Swift, AppKit and AVFoundation; SunPet also retains its IOKit/Network motion helper. No additional package-manager runtime framework is required.
 
-Apple Silicon macOS14+, system Xcode Command Line Tools. Native runtime uses Swift/AppKit/AVFoundation (Sun also uses its existing IOKit/Network helper). No new package-manager/runtime framework.
+Supply permitted media under the ignored `.local-media/` directory first; see [the media guide](docs/MEDIA.md). **A public clone contains no third-party media and cannot build without the required assets.** Missing media causes an explicit failure, not an automatic download or generated substitute.
 
 ```sh
 ./build.sh cats       # or sun / shaolan / goodthing / nailong
 ./build.sh all
 ```
 
-User media must first be supplied under ignored `.local-media/`; see [MEDIA.md](docs/MEDIA.md). A clean public clone intentionally contains no third-party media, and builds fail explicitly when it is absent. Animation preparation requires existing FFmpeg/FFprobe/Pillow, not additional app runtime dependencies.
+Outputs are `build/<app>.app`, signed ad hoc and strictly verified, followed by isolated silent self-tests. The build script does not install or launch normal-mode apps.
 
-Outputs are `build/<app>.app`, signed ad hoc and strictly verified, followed by isolated silent self-tests. The script never installs or starts normal-mode apps. Native window/animation smoke tests:
+Native window and animation smoke tests use the actual application filenames:
 
 ```sh
 "build/奶龙桌宠.app/Contents/MacOS/NailongPet" --ui-smoke-test
@@ -61,27 +68,33 @@ Outputs are `build/<app>.app`, signed ad hoc and strictly verified, followed by 
 python3 scripts/check-public-tree.py
 ```
 
-## Repository / 目录
+Animation preparation uses existing FFmpeg, FFprobe and Pillow installations. These are offline preparation tools, not application runtime dependencies.
 
-- `Shared/`: one actual native-menu presenter compiled by all five targets for both buttons; no target copies.
-- `Shared/Human/`: one bridge/protocol and reply-configuration implementation used by all three human pets (tiny target-specific stop-test adapters remain).
-- `Shared/Native/`: one drag discriminator and one shuffle implementation used by Cats/Nailong.
-- `Apps/Human/targets/`: pinned Sun/Shaolan/FengGe source, original upstream notices and local adaptations.
+## Repository layout
+
+- `Shared/`: the native-menu presenter shared by all five apps for both mouse buttons.
+- `Shared/Human/`: shared bridge/protocol and reply configuration for the three human pets; tiny target-specific stop-test adapters remain.
+- `Shared/Native/`: shared drag discrimination and shuffle logic for Cats and Nailong.
+- `Apps/Human/targets/`: pinned SunPet, ShaolanPet and FengGe sources, upstream notices and local adaptations.
 - `Apps/Cats/`, `Apps/Nailong/`: native apps and isolated tests.
 - `scripts/`: local media preparation and public-source hygiene checks.
-- `Licenses/`, `CREDITS.md`: full attribution and permission boundaries.
-- `.local-media/`, `.local-config/`, `.local-evidence/`, `build/`: ignored, local-only; never publish unreviewed.
+- `Licenses/`, `CREDITS.md`: attribution and permission boundaries.
+- `.local-media/`, `.local-config/`, `.local-evidence/`, `build/`: ignored local resources, not public artifacts.
 
-Actual verification/install status is maintained only in [docs/task-status.md](docs/task-status.md). Existing app bundle identities are retained so saved settings can migrate without resetting user choices. Previous sibling repositories are historical snapshots, not parallel active implementations.
+Verification and installation records are maintained in [the task ledger](docs/task-status.md). Existing bundle identities are retained so settings can migrate without resets. Earlier sibling repositories are historical snapshots, not parallel active implementations.
 
-## Open source and credit / 开源与署名
+## License and credits
 
-Read [CREDITS.md](CREDITS.md) and [LICENSE](LICENSE). Original SunPet/ShaolanPet/FengGe MIT notices are preserved. Dragon-frog is credited for the Nailong media and original toy; its unlicensed assets are **not** relicensed, and its old spring port is removed from this source candidate. Cat media authors remain unresolved where the user's pack lacks provenance.
+Source code is published under the [MIT license](LICENSE), with original upstream notices retained. See [CREDITS.md](CREDITS.md) for authors, repositories and pinned revisions.
 
-**Credit is not a redistribution license.** Public code and prebuilt applications containing third-party media are different deliverables. Do not include private media, original download packs or local evidence in a public push/release. `check-public-tree.py` is a hygiene check, not legal clearance. This repository distributes source code only; it does not distribute the local media packs or prebuilt applications. 本仓库仅公开源码，不提供本机素材包或带素材的安装包。
+Original SunPet, ShaolanPet and FengGe MIT notices are preserved. Dragon-frog is credited for the Nailong media and original toy; its unlicensed assets are **not relicensed**, and the old web spring port is absent from this source. Cat authors remain unresolved where the supplied pack lacks provenance.
 
-## Local install / 本机安装
+**Credit is not a redistribution license.** This repository publishes source code only, not local media packs or prebuilt applications containing them. Do not upload media, original download packs or local evidence without reviewing the applicable rights. The public-tree checker is a hygiene check, not legal clearance.
 
-Quit the corresponding running pet before replacing its verified app bundle. Keep the same bundle ID and preserve its preferences. These five apps use separate preference domains; never delete other pets or disable system signing/security settings to install. Closing one native multi-pet window is distinct from quitting that app's whole group.
+## Local installation
 
-本机现有应用入口保留在 `/Applications`。不要并行运行旧可执行文件和新包，不擅自清用户偏好；卸载时先退出并仅移除目标App。可重建 `build/` 在构建/验证结束后清理，原下载包和必要素材不是缓存。
+Quit the corresponding pet before replacing its verified app bundle. Keep its bundle ID and preferences. The five apps have separate preference domains; do not delete other pets or weaken system signing or security settings to install them.
+
+Application entry points remain in `/Applications`. Do not run old and new executables simultaneously. Closing one window in a multi-pet app is different from quitting that app's entire group.
+
+To uninstall, quit and remove only the intended app. Rebuildable `build/` outputs can be cleaned after validation; original downloads and required local media are not disposable caches.
