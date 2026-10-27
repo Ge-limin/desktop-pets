@@ -33,7 +33,7 @@ Each pet plays one clip at a time. Stop cancels pending replies. Mute preserves 
 
 Human pets can independently select whose speech they answer. By default, they answer manual playback only. Optional chaining is limited to **two rounds**, not two total messages when multiple peers respond. The master switch controls receiving and answering; manual playback can still be announced to other opted-in listeners. Changing source filters cancels pending replies.
 
-Replies now target a **0.35–0.65-second pause after the preceding clip**, instead of intentionally starting early. Known leading silence is accounted for, with a small end buffer; unusually long leading silence can lengthen the pause. Timing is based on the announced audio duration, not a cross-process finish acknowledgement. Independent responding pets are not globally serialized.
+Reply timing follows the original authors' scheduling: compensate for the reply's leading silence and overlap the preceding clip's tail by **0.3 seconds**. SunPet and GoodThingPet use **0.2 seconds at hop 1**; the minimum scheduling delay is 0.02 seconds. There is no added random pause or end buffer. This intentionally overlaps speech; independent responding pets are not globally serialized.
 
 ## Apps
 

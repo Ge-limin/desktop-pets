@@ -174,6 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var companionPlayers: [Int: AVAudioPlayer] = [:]
     var companionLead: [Int: TimeInterval] = [:]
     var companionWork: DispatchWorkItem?
+    let companionOverlap: TimeInterval = 0.3
     let selfTest = CommandLine.arguments.contains("--self-test")
     /// 联动自检：真播一句，看对面的桌宠会不会接。测通道用，正常使用不带这个参数。
     let bridgeTest = CommandLine.arguments.contains("--bridge-test")
@@ -291,8 +292,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         let generation = companionGeneration
         guard let clip = takeCompanionClip() else { return }
         let lead = companionLead[clip.id] ?? 0
-        guard let delay = HumanReplyTiming.playbackDelay(after: duration, leadingSilence: lead,
-                                                        gap: selfTest ? 0.5 : nil) else { return }
+        let overlap = hop == 1 ? max(0.05, companionOverlap - 0.1) : companionOverlap
+        let delay = max(0.02, duration - overlap - lead)
         traceLog("排接话 hop=\(hop) root=\(root.title) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.bridgeEnabled, self.companionGeneration == generation,

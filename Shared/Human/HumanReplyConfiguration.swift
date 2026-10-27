@@ -63,7 +63,6 @@ extension AppDelegate {
     }
 
     func runSharedReplyConfigurationSelfTest(check: (Bool, String) -> Void, stopPlayback: () -> Void) {
-        HumanReplyTiming.runSelfTest(check: check)
         let others = PetRole.allCases.filter { $0 != bridge.me }
         let first = others[0], second = others[1]
         func event(_ from: PetRole, _ hop: Int = 0, root: PetRole? = nil) -> [AnyHashable: Any] {
