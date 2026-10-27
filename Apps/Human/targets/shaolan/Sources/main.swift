@@ -51,6 +51,7 @@ final class PetView: NSView {
     var initialWindow = NSPoint.zero
     let clickSequence = ImmediateClickSequence()
     private var doublePress = false
+    private var pressActive = false
     var dragged = false
     var animationTimer: Timer?
     var phase = 0.0
@@ -85,31 +86,41 @@ final class PetView: NSView {
     }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
+        guard clickSequence.acceptsDown(event, in: self) else { return }
+        pressActive = true
         doublePress = clickSequence.begin(event, in: self)
         initialMouse = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
         initialWindow = window?.frame.origin ?? .zero
         dragged = false
     }
     override func mouseDragged(with event: NSEvent) {
+        guard pressActive else { return }
         let current = window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
         let dx = current.x - initialMouse.x, dy = current.y - initialMouse.y
         if hypot(dx, dy) > 0 { dragged = true; clickSequence.cancel() }
         if dragged { window?.setFrameOrigin(NSPoint(x: initialWindow.x + dx, y: initialWindow.y + dy)) }
     }
     override func mouseUp(with event: NSEvent) {
+        guard pressActive else { return }; pressActive = false
         if dragged { clickSequence.cancel(); owner?.savePosition(); return }
         guard event.clickCount <= 2 else { return }
-        if doublePress { doublePress = false; clickSequence.cancel(); owner?.playAllRandom(); return }
+        if doublePress {
+            doublePress = false; clickSequence.cancel(); owner?.playAllRandom()
+            NativePetMenu.traceDoublePlayback(owner?.player?.isPlaying == true); return
+        }
         guard window != nil, !isHidden, let owner else { return }
-        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence)
+        NativePetMenu.shared.present(owner.makeClipMenu(), for: self, sequence: clickSequence,
+            onDouble: { [weak owner] in
+                guard let owner else { return false }; owner.playAllRandom(); return owner.player?.isPlaying == true
+            }, onDragEnd: { [weak owner] in owner?.savePosition() })
     }
     override func rightMouseDown(with event: NSEvent) {
-        clickSequence.cancel()
+        pressActive = false; clickSequence.cancel()
         guard let owner else { return }
         owner.presentPetMenu(owner.makeMenu(), event: event)
     }
     override func viewWillMove(toWindow newWindow: NSWindow?) {
-        clickSequence.cancel()
+        pressActive = false; clickSequence.cancel()
         super.viewWillMove(toWindow: newWindow)
     }
     override func accessibilityPerformPress() -> Bool {

@@ -92,7 +92,7 @@ final class PetController: NSObject {
     }
     func eventPoint(_ event: NSEvent) -> NSPoint { panel.convertPoint(toScreen: event.locationInWindow) }
     func press(_ event: NSEvent) {
-        guard !closed, !model.down else { return }
+        guard !closed, !model.down, clickSequence.acceptsDown(event, in: view) else { return }
         doublePress = clickSequence.begin(event, in: view)
         suppressClick = event.clickCount > 2
         model.press(eventPoint(event))
@@ -114,8 +114,14 @@ final class PetController: NSObject {
         let random = doublePress
         model.cancel(); doublePress = false; suppressClick = false
         if click {
-            if random { playRandom() }
-            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence) }
+            if random { playRandom(); NativePetMenu.traceDoublePlayback(audio.player?.isPlaying == true) }
+            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence,
+                onDouble: { [weak self] in
+                    guard let self, !self.closed else { return false }; self.playRandom(); return self.audio.player?.isPlaying == true
+                }, onDragEnd: { [weak self] in
+                    guard let self, !self.closed else { return }
+                    self.returnToScreen(); self.app?.savePreferences()
+                }) }
         }
         updateFace(); app?.savePreferences()
     }
@@ -154,7 +160,7 @@ final class PetController: NSObject {
         if checkRelease && model.down && NSEvent.pressedMouseButtons & 1 == 0 { cancelGesture() }
         updateFace()
         let local = view.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        let ignoreMouse = !model.down && !isOpaque(local)
+        let ignoreMouse = !model.down && !NativePetMenu.shared.isHandlingPress(for: view) && !isOpaque(local)
         if panel.ignoresMouseEvents != ignoreMouse { panel.ignoresMouseEvents = ignoreMouse }
     }
     func cancelGesture() { clickSequence.cancel(); doublePress = false; suppressClick = false; model.cancel(); updateFace() }

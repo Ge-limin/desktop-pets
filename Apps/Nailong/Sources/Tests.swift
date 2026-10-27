@@ -90,9 +90,10 @@ func runTests(app: AppDelegate, ui: Bool) {
     check(middle.closed && app.pets.contains { $0 === last }, "close exact middle window")
     app.setCount(3); check(Set(app.pets.map(\.id)).count == 3, "unique IDs after remove/add")
     app.setCount(1)
-    // Real nonmodal panels in both silent modes; only right-click settings use an observer.
+    // Actual native menus; reset expression/audio between independent sampled cases.
     let view = first.view, picker = NativePetMenu.shared
-    checkImmediateVoiceGestures(view: view, cancel: { first.cancelGesture() }, plays: { first.audio.playCount }) { check($0, $1) }
+    checkImmediateVoiceGestures(view: view, cancel: { first.cancelGesture() }, plays: { first.audio.playCount },
+                               check: { check($0, $1) }, prepareCase: { first.audio.stopAll() })
     let soundMenu = first.soundMenu()
     let choices = soundMenu.items.filter { $0.action == #selector(PetController.say(_:)) }
     check(choices.count == 6 && choices.map(\.title) == soundNames && soundMenu.items[0].title.contains("6"), "all six real clips at top level with total")

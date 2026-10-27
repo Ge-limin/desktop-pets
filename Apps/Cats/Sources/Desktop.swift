@@ -146,11 +146,11 @@ final class PetController: NSObject {
         guard !closed else { return }
         if checkRelease && model.down && NSEvent.pressedMouseButtons & 1 == 0 { cancelGesture() }
         let local = view.convert(panel.convertPoint(fromScreen: mouse ?? NSEvent.mouseLocation), from: nil)
-        setIgnoresMouse(!model.down && !isOpaque(local))
+        setIgnoresMouse(!model.down && !NativePetMenu.shared.isHandlingPress(for: view) && !isOpaque(local))
     }
     func eventPoint(_ event: NSEvent) -> NSPoint { panel.convertPoint(toScreen: event.locationInWindow) }
     func press(_ event: NSEvent) {
-        guard !closed, !model.down else { return }
+        guard !closed, !model.down, clickSequence.acceptsDown(event, in: view) else { return }
         doublePress = clickSequence.begin(event, in: view)
         suppressClick = event.clickCount > 2
         model.press(eventPoint(event)); panelOrigin = panel.frame.origin; setIgnoresMouse(false)
@@ -170,8 +170,14 @@ final class PetController: NSObject {
         let playCurrent = doublePress
         doublePress = false; suppressClick = false; returnToScreen()
         if click {
-            if playCurrent { playCurrentCat() }
-            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence) }
+            if playCurrent { playCurrentCat(); NativePetMenu.traceDoublePlayback(audio.player?.isPlaying == true) }
+            else { NativePetMenu.shared.present(soundMenu(), for: view, sequence: clickSequence,
+                onDouble: { [weak self] in
+                    guard let self, !self.closed else { return false }; self.playCurrentCat(); return self.audio.player?.isPlaying == true
+                }, onDragEnd: { [weak self] in
+                    guard let self, !self.closed else { return }
+                    self.returnToScreen(); self.app?.savePreferences()
+                }) }
         }
         app?.savePreferences()
     }

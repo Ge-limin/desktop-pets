@@ -2,7 +2,8 @@ import AppKit
 
 func runGestureTests(app: AppDelegate, check: (Bool, String) -> Void) {
     let pet = app.pets[0], view = pet.view, picker = NativePetMenu.shared
-    checkImmediateVoiceGestures(view: view, cancel: { pet.cancelGesture() }, plays: { pet.audio.playCount }, check: check)
+    checkImmediateVoiceGestures(view: view, cancel: { pet.cancelGesture() }, plays: { pet.audio.playCount }, check: check,
+                               prepareCase: { pet.audio.stop() })
     let originalSizes = app.assets.cats.map { $0.sprite.image.size }
     let menu = pet.soundMenu()
     let choices = menu.items.filter { $0.action == #selector(PetController.changeRole(_:)) }

@@ -44,8 +44,8 @@ for target in "${targets[@]}"; do
 <key>CFBundleName</key><string>$name</string>
 <key>CFBundleDisplayName</key><string>$name</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>2.3</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>2.4</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
@@ -54,8 +54,8 @@ PLIST
   if [[ -f "$dir/Info.plist" ]]; then
     # Preserve original app identities/icons, update version to identify the local build.
     cp "$dir/Info.plist" "$app/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.3' "$app/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 5' "$app/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.4' "$app/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 6' "$app/Contents/Info.plist"
     for license in "$dir/Upstream/LICENSE" "$dir/Upstream/LICENSE-SunPet" "$dir/Upstream/NOTICE.md"; do
       [[ ! -f "$license" ]] || cp "$license" "$app/Contents/Resources/$(basename "$license")"
     done
