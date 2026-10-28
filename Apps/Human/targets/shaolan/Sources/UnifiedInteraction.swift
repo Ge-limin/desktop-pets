@@ -162,11 +162,6 @@ extension AppDelegate {
         else if defaults.object(forKey: "bridgeDisabled") != nil { bridgeEnabled = !defaults.bool(forKey: "bridgeDisabled") }
         loadReplyPreferences()
     }
-    func cancelCompanion() {
-        companionGeneration += 1
-        companionWork?.cancel(); companionWork = nil
-        pendingUtteranceID = nil
-    }
     @objc func toggleBridge() {
         bridgeEnabled.toggle(); defaults.set(bridgeEnabled, forKey: "bridgeEnabled")
         cancelCompanion()

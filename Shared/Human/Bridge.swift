@@ -5,12 +5,9 @@ import Foundation
 //
 // 一对多，带跳数限制。每个人说的话所有人都能听见，但只听自己配置里那几个。
 //
-// 默认只接用户手动播放（hop = 0）。明确开启有限接龙后可接 hop = 1，
-// 回复广播 hop + 1；hop >= 2 或负数一律不接，环形配置也最多两轮。
-// root 原样传递；每条带 ID 的发言通过共享原子 receipt 最多选出一个接话者。
-// 保证只适用于全部参与者升级后的本地组合。旧版不认 receipt，仍可能接新版广播，
-// 因此混用旧版/不协调客户端不受保证；新版明确拒绝无 ID 的旧版自动接话输入。
-// 自动接话开关只控制收听；手动播放不依赖收听定时器，仍可广播。
+// 收听所选来源的 hop = 0 或 1；回复广播 hop + 1，hop >= 2 不再接。
+// root 原样传递。自动接话开关只控制收听；手动播放仍可广播。
+// 没有跨应用抢答协调；用户通过来源选择组成自己想要的接话链。
 //
 // 通道用 DistributedNotificationCenter：同一个用户会话里跨进程直达，实测 5ms 左右，
 // 不要权限、不开端口、不碰网络。对方在不在跑用 NSRunningApplication 查 bundle id，
@@ -25,6 +22,14 @@ enum PetRole: String, CaseIterable {
     case sunpet = "com.ganzhe2028.sunpet"
     case fengge = "local.goodthing.desktop-pet"
     case shaolan = "local.shaolan.desktop-pet"
+
+    var defaultReplyPeers: [PetRole] {
+        switch self {
+        case .sunpet: return [.fengge]
+        case .fengge: return [.shaolan]
+        case .shaolan: return []
+        }
+    }
 
     var title: String {
         switch self {
@@ -44,36 +49,31 @@ final class PetBridge: NSObject {
     let me: PetRole
     /// 我要接谁的话。空数组 = 只说不接。
     private(set) var peers: [PetRole]
-    let defaultPeers: [PetRole]
-    private(set) var allowChaining = false
 
     /// 我听的那几个人，从「都不在」变成「有人在」或反过来时调用，主线程。
     var onPresenceChange: ((Bool) -> Void)?
     /// 我该接的那个人说话了，主线程。
-    /// 参数：谁说的、那句多长、clipID、文本、第几跳、链的起点、独立发言 ID
-    var onSpoke: ((PetRole, TimeInterval, Int, String, Int, PetRole, String) -> Void)?
-    var onProtocolError: ((String) -> Void)?
+    /// 参数：谁说的、那句多长、clipID、文本、第几跳、链的起点
+    var onSpoke: ((PetRole, TimeInterval, Int, String, Int, PetRole) -> Void)?
 
     private var presenceTimer: Timer?
     private var lastPresent: Bool?
     private var started = false
 
-    init(me: PetRole, peers: [PetRole]) {
+    init(me: PetRole) {
         self.me = me
-        self.peers = peers.filter { $0 != me }
-        self.defaultPeers = self.peers
+        self.peers = me.defaultReplyPeers
         super.init()
     }
 
-    func configure(peers: [PetRole], allowChaining: Bool) {
+    func configure(peers: [PetRole]) {
         self.peers = PetRole.allCases.filter { $0 != me && peers.contains($0) }
-        self.allowChaining = allowChaining
         if started { pollPresence() }
     }
 
     /// Both the notification ingress and delayed playback use this same policy.
     func accepts(from: PetRole, hop: Int) -> Bool {
-        from != me && peers.contains(from) && hop >= 0 && hop < 2 && (hop == 0 || allowChaining)
+        from != me && peers.contains(from) && hop >= 0 && hop < 2
     }
 
     /// 我要听的那几个里，此刻谁在跑。查 bundle id 而不是看通知，对方崩掉也能如实反映。
@@ -133,8 +133,7 @@ final class PetBridge: NSObject {
     /// - Parameters:
     ///   - hop: 第几跳。用户自己点的传 0（默认值），接别人的话传对方的 hop + 1。
     ///   - root: 这条链的起点。用户自己点的传 nil（就是我自己），接话时原样传下去。
-    /// Pure outgoing seam: every successful playback gets a fresh ID, even for the
-    /// same clip/root. Tests use this exact payload builder without posting to DNC.
+    /// Original six-field payload; tests use the same builder without posting to DNC.
     func speakingInfo(clipID: Int, duration: TimeInterval, label: String,
                       hop: Int = 0, root: PetRole? = nil) -> [String: Any] {
         [
@@ -144,7 +143,6 @@ final class PetBridge: NSObject {
             "label": label,
             "hop": hop,
             "root": (root ?? me).rawValue,
-            "utteranceID": HumanUtterance.make(),
         ]
     }
 
@@ -176,23 +174,18 @@ final class PetBridge: NSObject {
         guard let raw = info["from"] as? String, let from = PetRole(rawValue: raw) else { return }
         guard let hop = info["hop"] as? Int else { reject("invalid hop"); return }
         guard accepts(from: from, hop: hop) else { return }
-        guard let id = info["utteranceID"] as? String else {
-            reject("legacy/missing utteranceID: automatic reply refused"); return
-        }
-        guard HumanUtterance.valid(id) else { reject("invalid/expired utteranceID"); return }
-        guard let duration = info["duration"] as? Double, duration.isFinite, duration >= 0,
-              duration <= HumanUtterance.maximumDuration else { reject("invalid duration"); return }
+        guard let duration = info["duration"] as? Double, duration.isFinite, duration >= 0
+        else { reject("invalid duration"); return }
         let clipID = (info["clipID"] as? Int) ?? 0
         let label = (info["label"] as? String) ?? ""
         guard let root = (info["root"] as? String).flatMap(PetRole.init(rawValue:)) else {
             reject("invalid root"); return
         }
-        onSpoke?(from, duration, clipID, label, hop, root, id)
+        onSpoke?(from, duration, clipID, label, hop, root)
     }
 
     private func reject(_ message: String) {
         NSLog("Human reply protocol: %@", message)
-        onProtocolError?(message)
     }
 
     deinit { presenceTimer?.invalidate() }

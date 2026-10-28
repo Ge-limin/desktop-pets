@@ -1,8 +1,6 @@
 import AppKit
-import AVFoundation
 
-// Per-app preferences and hop/root protocol; shared atomic receipts arbitrate automatic replies.
-// Canonical human-app implementation; each target retains only its stop-test adapter.
+// Shared source preferences and menu. The master switch controls listening, not manual speech.
 extension AppDelegate {
     func loadReplyPreferences() {
         let peers: [PetRole]
@@ -12,15 +10,15 @@ extension AppDelegate {
         } else if defaults.object(forKey: "replyPeers") != nil {
             peers = []
         } else {
-            peers = bridge.defaultPeers
+            peers = bridge.me.defaultReplyPeers
         }
         cancelCompanion()
-        bridge.configure(peers: peers, allowChaining: defaults.bool(forKey: "replyAllowChaining"))
+        bridge.configure(peers: peers)
     }
 
     func setReplyPeers(_ peers: [PetRole]) {
         cancelCompanion()
-        bridge.configure(peers: peers, allowChaining: bridge.allowChaining)
+        bridge.configure(peers: peers)
         defaults.set(bridge.peers.map(\.rawValue), forKey: "replyPeers")
         updateBridgeStatus()
     }
@@ -32,12 +30,6 @@ extension AppDelegate {
         setReplyPeers(next)
     }
 
-    @objc func toggleReplyChaining() {
-        cancelCompanion()
-        bridge.configure(peers: bridge.peers, allowChaining: !bridge.allowChaining)
-        defaults.set(bridge.allowChaining, forKey: "replyAllowChaining")
-    }
-
     func appendReplySettings(to menu: NSMenu) {
         let sources = item("接谁的话", nil), sourceMenu = NSMenu()
         for peer in PetRole.allCases where peer != bridge.me {
@@ -47,12 +39,6 @@ extension AppDelegate {
             sourceMenu.addItem(option)
         }
         sources.submenu = sourceMenu; menu.addItem(sources)
-        let mode = item("接话方式", nil), modeMenu = NSMenu()
-        let explanation = item("默认只接手动播放；接龙按轮数封顶", nil)
-        explanation.isEnabled = false; modeMenu.addItem(explanation)
-        let chain = item("允许有限接龙（最多2轮）", #selector(toggleReplyChaining))
-        chain.state = bridge.allowChaining ? .on : .off; modeMenu.addItem(chain)
-        mode.submenu = modeMenu; menu.addItem(mode)
     }
 
     /// Receiving is optional; manual announcements remain available when autoreply is off.
@@ -62,135 +48,4 @@ extension AppDelegate {
         bridge.announceSpeaking(clipID: clip.id, duration: duration, label: clip.label, hop: hop, root: root)
     }
 
-    func runSharedReplyConfigurationSelfTest(check: (Bool, String) -> Void, stopPlayback: () -> Void) {
-        let testRoot = FileManager.default.temporaryDirectory.appendingPathComponent("HumanReplyTests-" + UUID().uuidString)
-        do { try FileManager.default.createDirectory(at: testRoot, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
-        catch { check(false, "create isolated reply test root: \(error)"); return }
-        let previousClaims = replyClaims
-        replyClaims = HumanReplyClaims(directory: testRoot.appendingPathComponent("app-claims"))
-        defer {
-            cancelCompanion(); replyClaims = previousClaims
-            do { try FileManager.default.removeItem(at: testRoot) }
-            catch { check(false, "remove isolated reply test root: \(error)") }
-        }
-        runHumanReplyCoordinationSelfTest(root: testRoot, check: check)
-        let others = PetRole.allCases.filter { $0 != bridge.me }
-        let first = others[0], second = others[1]
-        func event(_ from: PetRole, _ hop: Int = 0, root: PetRole? = nil) -> [AnyHashable: Any] {
-            ["from": from.rawValue, "hop": hop, "root": (root ?? from).rawValue,
-             "duration": 1.0, "clipID": 1, "label": "isolated", "utteranceID": HumanUtterance.make()]
-        }
-        func idle() { player?.stop(); cancelCompanion() }
-        idle(); excludedIDs = []; companionPool = clips; companionBag = []
-        defaults.set(nil, forKey: "replyPeers"); defaults.set(nil, forKey: "replyAllowChaining")
-        defaults.set(false, forKey: "bridgeEnabled"); loadUnifiedPreferences()
-        check(bridge.peers == bridge.defaultPeers && !bridge.allowChaining && !bridgeEnabled,
-              "missing reply settings retain target-specific peers, manual-only, disabled master")
-
-        defaults.set(nil, forKey: "bridgeEnabled"); defaults.set(true, forKey: "bridgeDisabled")
-        loadUnifiedPreferences()
-        check(!bridgeEnabled, "legacy disabled master is preserved")
-        defaults.set(false, forKey: "bridgeEnabled")
-
-        let sourceMenu = makeMenu().items.first { $0.title == "接谁的话" }?.submenu
-        check(sourceMenu?.items.map(\.title) == others.map(\.title), "both other humans have recognizable source toggles")
-        if let option = sourceMenu?.items.first {
-            let wasSelected = bridge.peers.contains(first)
-            toggleReplyPeer(option)
-            check(bridge.peers.contains(first) != wasSelected && !bridgeEnabled, "source checkbox toggles independently without enabling master")
-        }
-        for selected in [[first], [second], others, []] {
-            setReplyPeers(selected)
-            bridge.configure(peers: [], allowChaining: true)
-            loadReplyPreferences()
-            check(Set(bridge.peers) == Set(selected) && !bridge.allowChaining,
-                  "source allowlist persists and reloads: \(selected.map(\.title))")
-            check(!bridgeEnabled && !defaults.bool(forKey: "bridgeEnabled"), "filter edits never enable disabled master")
-            toggleBridge() // isolated: callbacks installed but no observer/timer
-            for peer in others {
-                idle(); bridge.receiveSpeaking(event(peer))
-                check((companionWork != nil) == selected.contains(peer), "ingress source allow/deny: \(peer.title)")
-                idle(); scheduleCompanion(from: peer, after: 1, hop: 0, root: peer, utteranceID: HumanUtterance.make())
-                check((companionWork != nil) == selected.contains(peer), "scheduler independently filters: \(peer.title)")
-            }
-            idle(); toggleBridge()
-        }
-
-        setReplyPeers(others)
-        let beforeManual = testAnnouncements.count
-        play(clips[0])
-        check(!bridgeEnabled && testAnnouncements.count == beforeManual + 1 && testAnnouncements.last?.hop == 0,
-              "disabled receiving master still announces manual play through isolated test seam")
-        check(testAnnouncements.last?.duration == player?.duration, "manual announcement uses decoded audio duration")
-        idle(); startBridge(); bridge.receiveSpeaking(event(first))
-        check(companionWork == nil, "disabled receiver refuses injected manual source")
-        toggleBridge()
-        for hop in [-1, 1, 2, 3] {
-            idle(); bridge.receiveSpeaking(event(first, hop))
-            check(companionWork == nil, "manual-only ingress refuses hop \(hop)")
-            scheduleCompanion(from: first, after: 1, hop: hop, root: first, utteranceID: HumanUtterance.make())
-            check(companionWork == nil, "manual-only scheduler refuses hop \(hop)")
-        }
-        idle(); bridge.receiveSpeaking(event(first)); let manualWork = companionWork
-        check(manualWork != nil, "manual source accepted, including newly enabled Shaolan/GoodThing sources")
-        let beforeReply = testAnnouncements.count; manualWork?.perform()
-        check(testAnnouncements.count == beforeReply + 1 && testAnnouncements.last?.hop == 1 && testAnnouncements.last?.root == first,
-              "actual queued reply increments hop and preserves root")
-        check(testAnnouncements.last?.duration == player?.duration, "reply announcement uses decoded audio duration")
-
-        idle(); bridge.receiveSpeaking(event(first)); let superseded = companionWork
-        bridge.receiveSpeaking(event(second)); let replacement = companionWork
-        let beforeReplacement = testAnnouncements.count
-        superseded?.perform()
-        check(companionWork === replacement && testAnnouncements.count == beforeReplacement,
-              "latest accepted source supersedes queued reply; stale work cannot play")
-        replacement?.perform()
-        check(testAnnouncements.count == beforeReplacement + 1 && testAnnouncements.last?.root == second,
-              "replacement reply keeps the latest source root")
-
-        idle(); toggleReplyChaining(); loadReplyPreferences()
-        check(bridge.allowChaining && defaults.bool(forKey: "replyAllowChaining"), "chain opt-in persists/reloads")
-        for hop in [-1, 0, 1, 2, 3] {
-            idle(); bridge.receiveSpeaking(event(first, hop, root: second))
-            check((companionWork != nil) == (hop == 0 || hop == 1), "chain ingress hard depth bound: \(hop)")
-            idle(); scheduleCompanion(from: first, after: 1, hop: hop, root: second, utteranceID: HumanUtterance.make())
-            check((companionWork != nil) == (hop == 0 || hop == 1), "chain scheduler hard depth bound: \(hop)")
-            if hop == 1 {
-                let before = testAnnouncements.count; companionWork?.perform()
-                check(testAnnouncements.count == before + 1 && testAnnouncements.last?.hop == 2 && testAnnouncements.last?.root == second,
-                      "second round broadcasts hop2 with original root")
-            }
-        }
-
-        idle(); bridge.receiveSpeaking(event(first)); let stalePeer = companionWork
-        setReplyPeers([second]); let beforeFilter = testAnnouncements.count; stalePeer?.perform()
-        check(companionWork == nil && testAnnouncements.count == beforeFilter && player?.isPlaying != true,
-              "source filter change cancels stale queued response")
-        setReplyPeers(others); bridge.receiveSpeaking(event(first)); let recheck = companionWork
-        bridge.configure(peers: [second], allowChaining: true) // bypass cancellation to exercise execution guard
-        recheck?.perform()
-        check(testAnnouncements.count == beforeFilter && player?.isPlaying != true, "queued work revalidates source even without generation change")
-        idle()
-        setReplyPeers(others); bridge.receiveSpeaking(event(first, 1)); let staleChain = companionWork
-        toggleReplyChaining(); staleChain?.perform()
-        check(companionWork == nil && testAnnouncements.count == beforeFilter, "chain change cancels queued auto source")
-        bridge.receiveSpeaking(event(first)); let staleMaster = companionWork
-        toggleBridge(); staleMaster?.perform()
-        check(companionWork == nil && !bridgeEnabled && testAnnouncements.count == beforeFilter, "master off cancels queued response")
-        toggleBridge(); bridge.receiveSpeaking(event(first)); let staleStop = companionWork
-        stopPlayback(); staleStop?.perform()
-        check(companionWork == nil && testAnnouncements.count == beforeFilter && player?.isPlaying != true,
-              "stop cancels queued autoreply and stale work cannot play")
-        play(clips[0]); let beforePriority = testAnnouncements.count
-        bridge.receiveSpeaking(event(first)); scheduleCompanion(from: first, after: 1, hop: 0, root: first, utteranceID: HumanUtterance.make())
-        check(companionWork == nil && player?.isPlaying == true && player?.volume == 0 && testAnnouncements.count == beforePriority,
-              "automatic reply cannot steal manual real silent playback")
-        idle(); excludedIDs = Set(clips.map(\.id)); companionBag = clips
-        bridge.receiveSpeaking(event(first))
-        check(companionWork == nil, "automatic candidates respect exclusions even in stale shuffle bag")
-        excludedIDs = []; companionBag = []
-
-        runReplySchedulerCoordinationSelfTest(check: check)
-        idle()
-    }
 }

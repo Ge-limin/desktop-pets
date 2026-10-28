@@ -123,9 +123,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var clips: [Clip] = []
     var allClipsBag = AllClipsShuffle()
     var testPlaybackIDs: [Int] = []
-    var replyClaims = HumanReplyClaims()
-    var companionPlaybackIsAutomatic = false
-    var pendingUtteranceID: String?
     var testCompanionPlayback: ((Clip, Int, PetRole) -> Void)?
     var testReplyBusy: Bool?
     var testAnnouncements: [(hop: Int, root: PetRole, duration: TimeInterval)] = []
@@ -149,9 +146,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     // Preserve the original transparent caption padding and saved window geometry.
     var panelSize: NSSize { NSSize(width: size, height: size + 48) }
     // 捧哏联动：好事桌宠说完一句，这边接一句短的。
-    let bridge = PetBridge(me: .sunpet, peers: [.fengge, .shaolan])
+    let bridge: PetBridge
+    init(bridge: PetBridge = PetBridge(me: .sunpet)) {
+        self.bridge = bridge
+        super.init()
+    }
     var bridgeEnabled = true
-    var bridgeStatus = "自动接话：等待峰哥和薄肌"
+    var bridgeStatus = "自动接话：等待峰哥"
     var companionPool: [Clip] = []
     var companionBag: [Clip] = []
     var companionWork: DispatchWorkItem?
@@ -162,13 +163,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var companionLead: [Int: TimeInterval] = [:]
     /// 捧哏只挑最短的几句，逗哏一说完就得接上，长句会把节奏拖垮。
     let companionIDs: Set<Int> = [1, 2, 4, 11, 13, 14]
-    /// 接话提前多少开始。像 Apple Music 的交叉淡入：峰哥那句还剩这点时间，捧哏就进来。
-    /// 相声里捧哏本来就是叠着逗哏的尾音接的，等他说完再开口中间会有一截空档。
-    let companionOverlap: TimeInterval = 0.3
     var resources: URL { Bundle.main.resourceURL! }
     let defaults = PetPreferences()
     let selfTest = CommandLine.arguments.contains("--self-test")
-    /// --trace 时把联动每一跳的时间、跳数、重叠打到 stdout，用来核对四步链的节奏。
+    /// --trace 时把联动每一跳的时间、跳数、重叠打到 stdout，用来核对接话的节奏。
     let trace = CommandLine.arguments.contains("--trace")
     func traceLog(_ text: String) {
         guard trace else { return }
@@ -283,7 +281,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     }
     func play(_ clip: Clip, hop: Int = 0, root: PetRole? = nil) {
         cancelCompanion()
-        companionPlaybackIsAutomatic = hop > 0
         if selfTest { testPlaybackIDs.append(clip.id) }
         do {
             player?.stop()
@@ -305,10 +302,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
             guard self.bridgeEnabled else { return }
             self.showCaption(present ? "自动接话就绪 · \(self.bridge.peerSummary)说完我接" : "自动接话：等待其他桌宠", seconds: 4)
         }
-        bridge.onProtocolError = { [weak self] message in self?.reportReplyFailure(message) }
-        bridge.onSpoke = { [weak self] from, duration, _, _, hop, root, utteranceID in
+        bridge.onSpoke = { [weak self] from, duration, _, _, hop, root in
             self?.traceLog("收到 \(from.title) 的话 hop=\(hop) root=\(root.title)")
-            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root, utteranceID: utteranceID)
+            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root)
         }
         // Tests exercise the real callback/queue but never join the live notification bus.
         if !selfTest {
@@ -326,18 +322,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
         bridgeStatus = bridge.peers.isEmpty ? "联动：只说不接" : "联动：\(bridge.peerSummary)"
     }
 
-    /// hop is the incoming event's depth. Only a successful reply increments it.
-    func takeCompanionClip() -> Clip? {
-        companionBag.removeAll { excludedIDs.contains($0.id) }
-        if companionBag.isEmpty {
-            companionBag = companionPool.filter { !excludedIDs.contains($0.id) }.shuffled()
-        }
-        return companionBag.popLast()
-    }
-
     func playCompanion(_ clip: Clip, hop: Int, root: PetRole) {
-        guard bridgeEnabled, (1...2).contains(hop), player?.isPlaying != true else { return }
-        companionPlaybackIsAutomatic = true
+        guard bridgeEnabled, (1...2).contains(hop), !replyPlaybackBusy else { return }
+        if selfTest, let playback = testCompanionPlayback {
+            playback(clip, hop, root)
+            return
+        }
         // 用预解码好的 player 直接起播，绕过 play() 里「读文件再解码」那几十毫秒。
         // 捧哏靠的就是准点，起播晚一点整段节奏就散了。
         if let ready = companionPlayers[clip.id] {
@@ -494,7 +484,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
 }
 
 import IOKit
-if let status = runHumanReplyClaimWorkerIfRequested() { exit(status) }
 if !CommandLine.arguments.contains("--self-test"), CommandLine.arguments.count == 5, CommandLine.arguments[1] == "--motion-helper", let port = UInt16(CommandLine.arguments[2]), port > 1024, let parent = Int32(CommandLine.arguments[4]), parent > 1 {
     SensorHelper().run(port:port,token:CommandLine.arguments[3],parent:parent)
 }
