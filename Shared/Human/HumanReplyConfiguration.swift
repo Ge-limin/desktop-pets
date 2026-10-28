@@ -1,7 +1,7 @@
 import AppKit
 import AVFoundation
 
-// Per-app preferences and the existing hop/root protocol; no shared state or new transport.
+// Per-app preferences and hop/root protocol; shared atomic receipts arbitrate automatic replies.
 // Canonical human-app implementation; each target retains only its stop-test adapter.
 extension AppDelegate {
     func loadReplyPreferences() {
@@ -63,11 +63,22 @@ extension AppDelegate {
     }
 
     func runSharedReplyConfigurationSelfTest(check: (Bool, String) -> Void, stopPlayback: () -> Void) {
+        let testRoot = FileManager.default.temporaryDirectory.appendingPathComponent("HumanReplyTests-" + UUID().uuidString)
+        do { try FileManager.default.createDirectory(at: testRoot, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+        catch { check(false, "create isolated reply test root: \(error)"); return }
+        let previousClaims = replyClaims
+        replyClaims = HumanReplyClaims(directory: testRoot.appendingPathComponent("app-claims"))
+        defer {
+            cancelCompanion(); replyClaims = previousClaims
+            do { try FileManager.default.removeItem(at: testRoot) }
+            catch { check(false, "remove isolated reply test root: \(error)") }
+        }
+        runHumanReplyCoordinationSelfTest(root: testRoot, check: check)
         let others = PetRole.allCases.filter { $0 != bridge.me }
         let first = others[0], second = others[1]
         func event(_ from: PetRole, _ hop: Int = 0, root: PetRole? = nil) -> [AnyHashable: Any] {
             ["from": from.rawValue, "hop": hop, "root": (root ?? from).rawValue,
-             "duration": 1.0, "clipID": 1, "label": "isolated"]
+             "duration": 1.0, "clipID": 1, "label": "isolated", "utteranceID": HumanUtterance.make()]
         }
         func idle() { player?.stop(); cancelCompanion() }
         idle(); excludedIDs = []; companionPool = clips; companionBag = []
@@ -99,7 +110,7 @@ extension AppDelegate {
             for peer in others {
                 idle(); bridge.receiveSpeaking(event(peer))
                 check((companionWork != nil) == selected.contains(peer), "ingress source allow/deny: \(peer.title)")
-                idle(); scheduleCompanion(from: peer, after: 1, hop: 0, root: peer)
+                idle(); scheduleCompanion(from: peer, after: 1, hop: 0, root: peer, utteranceID: HumanUtterance.make())
                 check((companionWork != nil) == selected.contains(peer), "scheduler independently filters: \(peer.title)")
             }
             idle(); toggleBridge()
@@ -117,7 +128,7 @@ extension AppDelegate {
         for hop in [-1, 1, 2, 3] {
             idle(); bridge.receiveSpeaking(event(first, hop))
             check(companionWork == nil, "manual-only ingress refuses hop \(hop)")
-            scheduleCompanion(from: first, after: 1, hop: hop, root: first)
+            scheduleCompanion(from: first, after: 1, hop: hop, root: first, utteranceID: HumanUtterance.make())
             check(companionWork == nil, "manual-only scheduler refuses hop \(hop)")
         }
         idle(); bridge.receiveSpeaking(event(first)); let manualWork = companionWork
@@ -142,7 +153,7 @@ extension AppDelegate {
         for hop in [-1, 0, 1, 2, 3] {
             idle(); bridge.receiveSpeaking(event(first, hop, root: second))
             check((companionWork != nil) == (hop == 0 || hop == 1), "chain ingress hard depth bound: \(hop)")
-            idle(); scheduleCompanion(from: first, after: 1, hop: hop, root: second)
+            idle(); scheduleCompanion(from: first, after: 1, hop: hop, root: second, utteranceID: HumanUtterance.make())
             check((companionWork != nil) == (hop == 0 || hop == 1), "chain scheduler hard depth bound: \(hop)")
             if hop == 1 {
                 let before = testAnnouncements.count; companionWork?.perform()
@@ -171,7 +182,7 @@ extension AppDelegate {
         check(companionWork == nil && testAnnouncements.count == beforeFilter && player?.isPlaying != true,
               "stop cancels queued autoreply and stale work cannot play")
         play(clips[0]); let beforePriority = testAnnouncements.count
-        bridge.receiveSpeaking(event(first)); scheduleCompanion(from: first, after: 1, hop: 0, root: first)
+        bridge.receiveSpeaking(event(first)); scheduleCompanion(from: first, after: 1, hop: 0, root: first, utteranceID: HumanUtterance.make())
         check(companionWork == nil && player?.isPlaying == true && player?.volume == 0 && testAnnouncements.count == beforePriority,
               "automatic reply cannot steal manual real silent playback")
         idle(); excludedIDs = Set(clips.map(\.id)); companionBag = clips
@@ -179,24 +190,7 @@ extension AppDelegate {
         check(companionWork == nil, "automatic candidates respect exclusions even in stale shuffle bag")
         excludedIDs = []; companionBag = []
 
-        // Complete directed three-role graph: broadcast branches are allowed, depth never exceeds 2.
-        let graph = PetRole.allCases.map { PetBridge(me: $0, peers: PetRole.allCases) }
-        for chained in [false, true] {
-            var events: [(from: PetRole, hop: Int, root: PetRole)] = [(bridge.me, 0, bridge.me)]
-            for node in graph {
-                node.configure(peers: PetRole.allCases, allowChaining: chained)
-                node.onSpoke = { _, _, _, _, hop, root in events.append((node.me, hop + 1, root)) }
-            }
-            var cursor = 0
-            while cursor < events.count && cursor < 50 {
-                let current = events[cursor]; cursor += 1
-                for node in graph { node.receiveSpeaking(event(current.from, current.hop, root: current.root)) }
-            }
-            check(cursor == events.count && events.count == (chained ? 7 : 3)
-                  && events.map(\.hop).max() == (chained ? 2 : 1) && events.allSatisfy { $0.root == bridge.me },
-                  "synthetic cyclic broadcast terminates within \(chained ? 2 : 1) rounds (not a total-reply budget)")
-            for node in graph { node.onSpoke = nil }
-        }
+        runReplySchedulerCoordinationSelfTest(check: check)
         idle()
     }
 }

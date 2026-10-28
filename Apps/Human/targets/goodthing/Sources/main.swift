@@ -147,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     var clips: [Clip] = []
     var allClipsBag = AllClipsShuffle()
     var testPlaybackIDs: [Int] = []
+    var replyClaims = HumanReplyClaims()
+    var companionPlaybackIsAutomatic = false
+    var pendingUtteranceID: String?
+    var testCompanionPlayback: ((Clip, Int, PetRole) -> Void)?
+    var testReplyBusy: Bool?
     var testAnnouncements: [(hop: Int, root: PetRole, duration: TimeInterval)] = []
     var testPresentedMenus: [NSMenu] = []
     var bag = ShuffleBag()
@@ -271,9 +276,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     func startBridge() {
         guard bridgeEnabled else { return }
         bridge.onPresenceChange = { [weak self] _ in self?.updateBridgeStatus() }
-        bridge.onSpoke = { [weak self] from, duration, _, _, hop, root in
+        bridge.onProtocolError = { [weak self] message in self?.reportReplyFailure(message) }
+        bridge.onSpoke = { [weak self] from, duration, _, _, hop, root, utteranceID in
             self?.traceLog("收到 \(from.title) 的话 hop=\(hop) root=\(root.title)")
-            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root)
+            self?.scheduleCompanion(from: from, after: duration, hop: hop, root: root, utteranceID: utteranceID)
         }
         // Tests exercise the real callback/queue but never join the live notification bus.
         if !selfTest { bridge.start(); updateBridgeStatus() }
@@ -284,29 +290,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     }
 
     /// hop is the incoming event's depth. Only a successful reply increments it.
-    func scheduleCompanion(from: PetRole, after duration: TimeInterval, hop: Int, root: PetRole) {
-        guard bridgeEnabled, bridge.accepts(from: from, hop: hop), !companionPool.isEmpty,
-              duration.isFinite, duration >= 0 else { return }
-        guard player?.isPlaying != true else { return } // manual playback always wins
-        cancelCompanion()
-        let generation = companionGeneration
-        guard let clip = takeCompanionClip() else { return }
-        let lead = companionLead[clip.id] ?? 0
-        let overlap = hop == 1 ? max(0.05, companionOverlap - 0.1) : companionOverlap
-        let delay = max(0.02, duration - overlap - lead)
-        traceLog("排接话 hop=\(hop) root=\(root.title) 等=\(String(format: "%.2f", delay)) 句=\(clip.id)")
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.bridgeEnabled, self.companionGeneration == generation,
-                  self.bridge.accepts(from: from, hop: hop), !self.excludedIDs.contains(clip.id),
-                  self.player?.isPlaying != true else { return }
-            self.companionWork = nil
-            self.traceLog("开口 hop=\(hop + 1) 句=\(clip.id) \(clip.label)")
-            self.playCompanion(clip, hop: hop + 1, root: root)
-        }
-        companionWork = work
-        if !selfTest { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work) }
-    }
-
     func takeCompanionClip() -> Clip? {
         companionBag.removeAll { excludedIDs.contains($0.id) }
         if companionBag.isEmpty {
@@ -317,6 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
 
     func playCompanion(_ clip: Clip, hop: Int, root: PetRole) {
         guard bridgeEnabled, (1...2).contains(hop), player?.isPlaying != true else { return }
+        companionPlaybackIsAutomatic = true
         // 用预解码好的 player 直接起播，绕过「读文件再解码」那几十毫秒。
         if let ready = companionPlayers[clip.id] {
             player?.stop()
@@ -398,6 +382,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
     }
     func play(_ clip: Clip, hop: Int = 0, root: PetRole? = nil) {
         cancelCompanion()
+        companionPlaybackIsAutomatic = hop > 0
         if selfTest { testPlaybackIDs.append(clip.id) }
         player?.stop(); pet.animate(false)
         do {
@@ -506,6 +491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate 
 
     func runSelfTest() { runUnifiedSelfTest(expectedCount: 11) }
 }
+if let status = runHumanReplyClaimWorkerIfRequested() { exit(status) }
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -174,6 +174,7 @@ extension AppDelegate {
     func cancelCompanion() {
         companionGeneration += 1
         companionWork?.cancel(); companionWork = nil
+        pendingUtteranceID = nil
     }
     @objc func toggleBridge() {
         bridgeEnabled.toggle(); defaults.set(bridgeEnabled, forKey: "bridgeEnabled")

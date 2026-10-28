@@ -7,7 +7,9 @@ import Foundation
 //
 // 默认只接用户手动播放（hop = 0）。明确开启有限接龙后可接 hop = 1，
 // 回复广播 hop + 1；hop >= 2 或负数一律不接，环形配置也最多两轮。
-// root 仍为起点角色并原样传递。这是深度上限，不是广播分叉的总句数预算。
+// root 原样传递；每条带 ID 的发言通过共享原子 receipt 最多选出一个接话者。
+// 保证只适用于全部参与者升级后的本地组合。旧版不认 receipt，仍可能接新版广播，
+// 因此混用旧版/不协调客户端不受保证；新版明确拒绝无 ID 的旧版自动接话输入。
 // 自动接话开关只控制收听；手动播放不依赖收听定时器，仍可广播。
 //
 // 通道用 DistributedNotificationCenter：同一个用户会话里跨进程直达，实测 5ms 左右，
@@ -48,8 +50,9 @@ final class PetBridge: NSObject {
     /// 我听的那几个人，从「都不在」变成「有人在」或反过来时调用，主线程。
     var onPresenceChange: ((Bool) -> Void)?
     /// 我该接的那个人说话了，主线程。
-    /// 参数：谁说的、那句多长、clipID、文本、第几跳、链的起点
-    var onSpoke: ((PetRole, TimeInterval, Int, String, Int, PetRole) -> Void)?
+    /// 参数：谁说的、那句多长、clipID、文本、第几跳、链的起点、独立发言 ID
+    var onSpoke: ((PetRole, TimeInterval, Int, String, Int, PetRole, String) -> Void)?
+    var onProtocolError: ((String) -> Void)?
 
     private var presenceTimer: Timer?
     private var lastPresent: Bool?
@@ -130,17 +133,25 @@ final class PetBridge: NSObject {
     /// - Parameters:
     ///   - hop: 第几跳。用户自己点的传 0（默认值），接别人的话传对方的 hop + 1。
     ///   - root: 这条链的起点。用户自己点的传 nil（就是我自己），接话时原样传下去。
-    func announceSpeaking(clipID: Int, duration: TimeInterval, label: String,
-                          hop: Int = 0, root: PetRole? = nil) {
-        guard anyoneElseRunning, (0...2).contains(hop) else { return }
-        let info: [String: Any] = [
+    /// Pure outgoing seam: every successful playback gets a fresh ID, even for the
+    /// same clip/root. Tests use this exact payload builder without posting to DNC.
+    func speakingInfo(clipID: Int, duration: TimeInterval, label: String,
+                      hop: Int = 0, root: PetRole? = nil) -> [String: Any] {
+        [
             "from": me.rawValue,
             "clipID": clipID,
             "duration": duration,
             "label": label,
             "hop": hop,
             "root": (root ?? me).rawValue,
+            "utteranceID": HumanUtterance.make(),
         ]
+    }
+
+    func announceSpeaking(clipID: Int, duration: TimeInterval, label: String,
+                          hop: Int = 0, root: PetRole? = nil) {
+        guard anyoneElseRunning, (0...2).contains(hop) else { return }
+        let info = speakingInfo(clipID: clipID, duration: duration, label: label, hop: hop, root: root)
         DistributedNotificationCenter.default().post(
             name: PetBridgeSignal.spoke,
             object: nil as String?,
@@ -163,14 +174,25 @@ final class PetBridge: NSObject {
     /// Pure ingress seam: self-tests inject dictionaries without observing/posting global notifications.
     func receiveSpeaking(_ info: [AnyHashable: Any]) {
         guard let raw = info["from"] as? String, let from = PetRole(rawValue: raw) else { return }
-        let hop = (info["hop"] as? Int) ?? 0
+        guard let hop = info["hop"] as? Int else { reject("invalid hop"); return }
         guard accepts(from: from, hop: hop) else { return }
-        let duration = (info["duration"] as? Double) ?? 1.0
-        guard duration.isFinite, duration >= 0 else { return }
+        guard let id = info["utteranceID"] as? String else {
+            reject("legacy/missing utteranceID: automatic reply refused"); return
+        }
+        guard HumanUtterance.valid(id) else { reject("invalid/expired utteranceID"); return }
+        guard let duration = info["duration"] as? Double, duration.isFinite, duration >= 0,
+              duration <= HumanUtterance.maximumDuration else { reject("invalid duration"); return }
         let clipID = (info["clipID"] as? Int) ?? 0
         let label = (info["label"] as? String) ?? ""
-        let root = (info["root"] as? String).flatMap(PetRole.init(rawValue:)) ?? from
-        onSpoke?(from, duration, clipID, label, hop, root)
+        guard let root = (info["root"] as? String).flatMap(PetRole.init(rawValue:)) else {
+            reject("invalid root"); return
+        }
+        onSpoke?(from, duration, clipID, label, hop, root, id)
+    }
+
+    private func reject(_ message: String) {
+        NSLog("Human reply protocol: %@", message)
+        onProtocolError?(message)
     }
 
     deinit { presenceTimer?.invalidate() }
