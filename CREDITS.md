@@ -19,12 +19,13 @@ Original MIT texts, copyright notices and upstream NOTICE files are retained in 
 ## Media and inspiration / 素材与玩法来源
 
 - [Dragon-frog](https://github.com/VIPmrgj/Dragon-frog), **VIPmrgj**, revision `1ab13408da6a40d757189c23831c15f8a2324a5f`: original Nailong web toy and image/audio selection. No LICENSE was found in the reviewed revision. Its PNG/WAV assets are **local-only**, not covered by this repository's code license. The old web spring/drag-physics port is not included in the unified published-code candidate. / 奶龙网页玩具及图声选材来源；所审版本未声明许可证，素材仅本机使用，旧网页弹簧移植不纳入可公开代码候选。
+- **Nailong jacket skin**: three transparent sprites derived from a user-supplied reference image, published with the provider's explicit permission on 2026-11-19. The watermarked reference is not published. These sprites are outside the source-code MIT license; see [their notice](Licenses/Nailong-Jacket-Skin-Notice.txt). / 奶龙羽绒服皮肤：三张透明表情图由用户提供的参考图制作，已取得提供者明确的公开发布授权；带水印原图不公开，皮肤不适用源码 MIT 许可。
 - **孙宇晨、邵艾伦、峰哥及各原录音/照片权利人**: portraits and original speech used in local media packs; code MIT does not license their likenesses or recordings. Upstream media notices are retained. / 真人头像与录音独立归原权利人。
 - **Cat meme creators and original image/audio/video rightsholders**: the user-provided meme pack is not an authorship or license certificate. Exact selected local-file hashes/time ranges/processing are in private per-role manifests. Original author information is not consistently present in that pack; unknown authors are explicitly unresolved, not attributed to the downloader or this project. / 猫梗原作者与图声视频权利人：用户提供的集合不构成授权或作者证明。无法从包中核实的作者明确待确认，不把下载者或本项目署为原作者。
 - Historical local prototypes used **林芷伊kiwi** (Bilibili UID `16993069`, `BV1Lz7Yz2EUd`) and **超级无敌大开门** (`BV1Kvq2BiEqT`). Those media were replaced at the user's request and are **not shipped in the current cat pack**. This acknowledgement records prototype history, not a redistribution grant. / 早期原型参考记录；当前猫包已不含这些素材。
 
 ## Publication boundary / 开源边界
 
-The repository publishes source code under its retained licenses. `.local-media/`, `.local-config/`, `.local-evidence/` and `build/` are ignored and must not be uploaded or included in public binaries. Use your own permitted assets; check both source and media permissions before any release. Source publication does not establish media rights clearance or authorize a media-containing binary release.
+The repository publishes source code under its retained licenses, plus the three expressly permitted Nailong jacket sprites. `.local-media/`, `.local-config/`, `.local-evidence/` and `build/` are ignored and must not be uploaded. Use your own permitted assets; check both source and media permissions before any release. Publishing these sprites does not authorize a media-containing binary release.
 
-公开内容是源代码与合法许可文件，不是本机有媒体的安装包。未完成作者/权限核验的素材不能因附上credit就公开。源码开源不代表完成素材授权核验，也不代表可以分发含素材的安装包。
+公开内容是源码、合法许可文件及三张已获准发布的奶龙羽绒服皮肤，不是本机有媒体的安装包。未完成作者/权限核验的其他素材不能因附上credit就公开。源码开源不代表可以分发含其他素材的安装包。

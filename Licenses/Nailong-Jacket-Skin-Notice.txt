@@ -1,0 +1,9 @@
+Nailong jacket skin
+
+The three transparent PNG sprites under Apps/Nailong/Assets/JacketSkin/
+were derived from a user-supplied reference image. The provider confirmed
+permission to publish the image and these derivatives in this repository
+on 2026-11-19. The reference image itself is not included.
+
+These sprites are media, not part of the repository's MIT-licensed source
+code. No broader license for reuse or redistribution is granted here.
