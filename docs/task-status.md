@@ -1,5 +1,9 @@
 # Integration status / 整合状态
 
+## Nailong jacket skin / 奶龙羽绒服皮肤 (2026-11-19)
+
+User supplied a watermarked reference image, explicitly requested a replacement skin and public project push, and confirmed publication rights for the reference and derived sprites. Three transparent, watermark-free expressions (closed, open, laugh) were prepared and made the only public media exception. The original reference, original Nailong media and local backups remain untracked. `build.sh nailong` overlays the new expressions on permitted local media; the original six sounds are still required. The build's silent self-test and native-window UI smoke test passed. The tested app replaced the existing `/Applications` entry and restarted as one normal instance; installed sprite bytes and signature were verified. Non-position preferences were preserved; the saved window position changed when the app reopened. No media-containing binary is published.
+
 Status: completed — simple selected-source chain installed and verified in human2.10/build12; rejected2.9 coordination removed
 Updated: 2026-10-28
 Owner: main Pi integration session accepted the frozen simplification from completed subagent tool task8fb425a1-94d6-4dc, built/installed it and verified preference migration and cleanup. All write scopes and background work closed.

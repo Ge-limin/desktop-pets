@@ -32,6 +32,13 @@ for target in "${targets[@]}"; do
   fi
   swiftc -O -module-cache-path "$PWD/build/module-cache" -target arm64-apple-macosx14.0 "${frameworks[@]}" "$dir"/Sources/*.swift "${shared_sources[@]}" -o "$app/Contents/MacOS/$executable"
   ditto "$media" "$app/Contents/Resources"
+  if [[ "$target" == nailong ]]; then
+    # The separately permitted jacket skin replaces only the three runtime sprites.
+    cp Apps/Nailong/Assets/JacketSkin/closed.png "$app/Contents/Resources/图片/侧，闭眼.png"
+    cp Apps/Nailong/Assets/JacketSkin/open.png "$app/Contents/Resources/图片/侧，睁眼.png"
+    cp Apps/Nailong/Assets/JacketSkin/laugh.png "$app/Contents/Resources/图片/大笑.png"
+    cp Licenses/Nailong-Jacket-Skin-Notice.txt "$app/Contents/Resources/"
+  fi
   # License files are plain files, not role directories interpreted by Cats' loader.
   cp Licenses/ShaolanPet-MIT.txt "$app/Contents/Resources/LICENSE-ShaolanPet.txt"
   cp CREDITS.md "$app/Contents/Resources/CREDITS.md"

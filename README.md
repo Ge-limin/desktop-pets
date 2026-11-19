@@ -55,7 +55,7 @@ Playback metadata labels are not displayed below cats; genuine playback errors r
 
 Requires **Apple Silicon, macOS 14 or later, and Xcode Command Line Tools**. Runtime code uses Swift, AppKit and AVFoundation; SunPet also retains its IOKit/Network motion helper. No additional package-manager runtime framework is required.
 
-Supply permitted media under the ignored `.local-media/` directory first; see [the media guide](docs/MEDIA.md). **A public clone contains no third-party media and cannot build without the required assets.** Missing media causes an explicit failure, not an automatic download or generated substitute.
+Supply permitted media under the ignored `.local-media/` directory first; see [the media guide](docs/MEDIA.md). **A public clone contains only the separately permitted Nailong jacket sprites, not the other required media, and cannot build without those assets.** Missing media causes an explicit failure, not an automatic download or generated substitute. The Nailong build overlays its three published jacket sprites on the local media; the original six sounds are still required.
 
 ```sh
 ./build.sh cats       # or sun / shaolan / goodthing / nailong
@@ -93,7 +93,7 @@ Source code is published under the [MIT license](LICENSE), with original upstrea
 
 Original SunPet, ShaolanPet and FengGe MIT notices are preserved. Dragon-frog is credited for the Nailong media and original toy; its unlicensed assets are **not relicensed**, and the old web spring port is absent from this source. Cat authors remain unresolved where the supplied pack lacks provenance.
 
-**Credit is not a redistribution license.** This repository publishes source code only, not local media packs or prebuilt applications containing them. Do not upload media, original download packs or local evidence without reviewing the applicable rights. The public-tree checker is a hygiene check, not legal clearance.
+**Credit is not a redistribution license.** The three permitted Nailong jacket sprites are the only published media exception; see [their notice](Licenses/Nailong-Jacket-Skin-Notice.txt). The repository does not publish local media packs or prebuilt applications. Do not upload other media, original download packs or local evidence without reviewing the applicable rights. The public-tree checker is a hygiene check, not legal clearance.
 
 ## Local installation
 
